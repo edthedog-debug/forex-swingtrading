@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 import yfinance as yf
 
-# Fetch EUR/USD data (Extended to 1 year with 1-hour or daily data, using 1y daily for robust history)
+# Fetch EUR/USD data (1 year for robust historical simulation)
 ticker = "EURUSD=X"
 data = yf.download(ticker, period="1y", interval="1d", progress=False)
 
@@ -17,10 +17,10 @@ if hasattr(data.columns, "levels"):
 dates = data.index.strftime("%Y-%m-%d").tolist()
 closes = [float(c) for c in data["Close"].tolist()]
 
-# Technical Parameters (Optimized for higher trade frequency)
+# Technical Parameters
 period_bb = 20
 period_rsi = 14
-period_sma50 = 50 # Faster trend context to allow more trades than SMA 200
+period_sma50 = 50
 
 if len(closes) < period_sma50:
     print("Not enough data for SMA 50")
@@ -60,31 +60,28 @@ def calculate_rsi(prices, periods):
 
 rsi = calculate_rsi(closes, period_rsi)
 
-# --- HIGH-FREQUENCY SIGNAL LOGIC ---
+# --- ROBUST EFFICIENCY SIGNAL LOGIC ---
 signal = "NEUTRAL (WAIT)"
 stop_loss = None
 take_profit = None
 
-risk_multiplier = 1.0
-reward_multiplier = 1.5 # Balanced R:R to ensure frequent target hits
+risk_multiplier = 1.2
+reward_multiplier = 1.8
 
-is_uptrend = current_price > sma50
-is_downtrend = current_price < sma50
-
-# Relaxed RSI and Band constraints to generate more trading signals
-if is_uptrend and current_price <= lower_band and rsi < 48:
-    signal = "BUY (HIGH FREQUENCY)"
+# Optimized thresholds to capture high-probability market swings effectively
+if current_price <= lower_band or rsi < 45:
+    signal = "BUY (LONG)"
     stop_loss = round(current_price - (st_dev * risk_multiplier), 4)
     take_profit = round(current_price + (st_dev * reward_multiplier), 4)
-elif is_downtrend and current_price >= upper_band and rsi > 52:
-    signal = "SELL (HIGH FREQUENCY)"
+elif current_price >= upper_band or rsi > 55:
+    signal = "SELL (SHORT)"
     stop_loss = round(current_price + (st_dev * risk_multiplier), 4)
     take_profit = round(current_price - (st_dev * reward_multiplier), 4)
 else:
     stop_loss = round(current_price - (st_dev * risk_multiplier), 4)
     take_profit = round(current_price + (st_dev * reward_multiplier), 4)
 
-# --- HIGH-VOLUME BACKTESTING MODULE ---
+# --- HIGH-EFFICIENCY BACKTESTING MODULE ---
 initial_capital = 10000.0
 capital = initial_capital
 position = 0  
@@ -92,7 +89,6 @@ entry_hist_price = 0.0
 entry_date = ""
 active_sl = 0.0
 active_tp = 0.0
-break_even_triggered = False
 
 trades = []
 peak_capital = initial_capital
@@ -108,34 +104,27 @@ for i in range(period_sma50, len(closes)):
     h_upper = h_sma20 + (2 * h_std)
     h_lower = h_sma20 - (2 * h_std)
     
-    h_sma50 = sum(closes[i - period_sma50 : i]) / period_sma50
     p_close = closes[i]
     h_rsi = calculate_rsi(closes[:i+1], period_rsi)
 
-    # RELAXED ENTRIES FOR HIGHER TRADE DENSITY
+    # EFFICIENT ENTRY LOGIC
     if position == 0:
-        if p_close > h_sma50 and p_close <= h_lower and h_rsi < 48:
+        if p_close <= h_lower or h_rsi < 45:
             position = 1
             entry_hist_price = p_close
             entry_date = dates[i]
             active_sl = p_close - (h_std * risk_multiplier)
             active_tp = p_close + (h_std * reward_multiplier)
-            break_even_triggered = False
             
-        elif p_close < h_sma50 and p_close >= h_upper and h_rsi > 52:
+        elif p_close >= h_upper or h_rsi > 55:
             position = -1
             entry_hist_price = p_close
             entry_date = dates[i]
             active_sl = p_close + (h_std * risk_multiplier)
             active_tp = p_close - (h_std * reward_multiplier)
-            break_even_triggered = False
-    
-    # EXITS & BREAK-EVEN MANAGEMENT
-    elif position == 1: 
-        if not break_even_triggered and p_close >= entry_hist_price + (h_std * risk_multiplier):
-            active_sl = entry_hist_price 
-            break_even_triggered = True
             
+    # ROBUST EXIT LOGIC
+    elif position == 1: 
         if p_close <= active_sl or p_close >= active_tp:
             profit = (p_close - entry_hist_price) * 10000
             capital += profit
@@ -147,10 +136,6 @@ for i in range(period_sma50, len(closes)):
             position = 0
 
     elif position == -1: 
-        if not break_even_triggered and p_close <= entry_hist_price - (h_std * risk_multiplier):
-            active_sl = entry_hist_price
-            break_even_triggered = True
-
         if p_close >= active_sl or p_close <= active_tp:
             profit = (entry_hist_price - p_close) * 10000
             capital += profit
@@ -168,12 +153,13 @@ for i in range(period_sma50, len(closes)):
         max_drawdown = current_dd
 
 for t in trades:
-    if t["profit"] > 0:
-        gross_profit += t["profit"]
+    p_val = t.get("profit", 0)
+    if p_val > 0:
+        gross_profit += p_val
     else:
-        gross_loss += abs(t["profit"])
+        gross_loss += abs(p_val)
 
-winning_trades = [t for t in trades if t["profit"] > 0]
+winning_trades = [t for t in trades if t.get("profit", 0) > 0]
 win_rate = round((len(winning_trades) / len(trades)) * 100, 1) if trades else 0.0
 total_return = round(((capital - initial_capital) / initial_capital) * 100, 2)
 profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else 0.0
@@ -181,7 +167,7 @@ profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else 0.0
 output = {
     "lastUpdate": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
     "currentPrice": round(current_price, 4),
-    "dates": dates[-90:], # Increased visual chart window to 90 days
+    "dates": dates[-90:], 
     "prices": closes[-90:],
     "upperBand": upper_band,
     "lowerBand": lower_band,
@@ -199,11 +185,11 @@ output = {
         "maxDrawdown": round(max_drawdown, 2),
         "profitFactor": profit_factor,
         "totalTrades": len(trades),
-        "trades": trades[-10:] # Expanded list to show the last 10 trades instead of 5
+        "trades": trades[-10:] if len(trades) >= 10 else trades
     }
 }
 
 with open("data.json", "w") as f:
     json.dump(output, f, indent=4)
 
-print("Successfully generated data.json with high-volume backtesting configuration.")
+print("Successfully generated data.json with efficient backtesting parameters.")
