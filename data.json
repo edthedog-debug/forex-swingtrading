@@ -1,5 +1,5 @@
 {
-    "lastUpdate": "2026-08-04 19:34:21 UTC",
+    "lastUpdate": "2026-08-04 20:00:38 UTC",
     "currentPrice": 1.1534,
     "dates": [
         "2026-05-13",
@@ -131,5 +131,53 @@
     "rsi": 64.3,
     "signal": "SELL (SHORT)",
     "stopLoss": 1.1619,
-    "takeProfit": 1.1392
+    "takeProfit": 1.1392,
+    "backtest": {
+        "initialCapital": 10000.0,
+        "finalCapital": 10183.12,
+        "totalReturn": 1.83,
+        "winRate": 66.7,
+        "trades": [
+            {
+                "entry": "2026-06-09",
+                "exit": "2026-06-19",
+                "type": "BUY",
+                "entryPrice": 1.1528,
+                "exitPrice": 1.1459,
+                "profit": -69.88
+            },
+            {
+                "entry": "2026-06-22",
+                "exit": "2026-06-25",
+                "type": "BUY",
+                "entryPrice": 1.1463,
+                "exitPrice": 1.1354,
+                "profit": -108.55
+            },
+            {
+                "entry": "2026-06-26",
+                "exit": "2026-07-16",
+                "type": "BUY",
+                "entryPrice": 1.1362,
+                "exitPrice": 1.147,
+                "profit": 108.56
+            },
+            {
+                "entry": "2026-07-17",
+                "exit": "2026-07-24",
+                "type": "SELL",
+                "entryPrice": 1.1445,
+                "exitPrice": 1.1377,
+                "profit": 67.84
+            },
+            {
+                "entry": "2026-07-27",
+                "exit": "2026-07-30",
+                "type": "BUY",
+                "entryPrice": 1.1395,
+                "exitPrice": 1.1467,
+                "profit": 72.26
+            }
+        ]
+    }
 }
