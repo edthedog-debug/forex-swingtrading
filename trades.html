@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Trade Journal & Performance Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-p-6 p-4">
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="flex justify-between items-center border-b border-slate-800 pb-4">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-emerald-400">Live Trade Journal</h1>
+                <p class="text-sm text-slate-400">Log entries & exits, track wins/losses, persistent across devices.</p>
+            </div>
+            <a href="index.html" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded font-medium text-slate-300">Back to Dashboard</a>
+        </header>
+
+        <!-- Metrics Summary -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Total Trades</span>
+                <p id="stat-total" class="text-2xl font-bold mt-1">0</p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Win Rate</span>
+                <p id="stat-winrate" class="text-2xl font-bold mt-1 text-emerald-400">0%</p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Net Profit / Loss</span>
+                <p id="stat-profit" class="text-2xl font-bold mt-1 text-slate-200">€0.00</p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Profit Factor</span>
+                <p id="stat-pf" class="text-2xl font-bold mt-1 text-blue-400">0.00</p>
+            </div>
+        </div>
+
+        <!-- Trade Input Form -->
+        <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg">
+            <h2 class="text-lg font-semibold mb-4 text-slate-200">New Trade Entry</h2>
+            <form id="trade-form" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Type</label>
+                    <select id="trade-type" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                        <option value="BUY">BUY (LONG)</option>
+                        <option value="SELL">SELL (SHORT)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Entry Price</label>
+                    <input type="number" step="0.0001" id="entry-price" required placeholder="1.1500" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Exit Price</label>
+                    <input type="number" step="0.0001" id="exit-price" required placeholder="1.1580" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Volume / Units</label>
+                    <input type="number" id="trade-units" value="10000" required class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded text-sm transition">Add Trade</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Trades Table History -->
+        <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-lg">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                <h3 class="font-semibold text-slate-200">Logged History</h3>
+                <button onclick="clearTrades()" class="text-xs text-red-400 hover:text-red-300 font-medium">Clear All</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-900/50 text-slate-400 text-xs border-b border-slate-700">
+                            <th class="p-3">Type</th>
+                            <th class="p-3">Entry</th>
+                            <th class="p-3">Exit</th>
+                            <th class="p-3">Result (€)</th>
+                            <th class="p-3 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trades-table-body" class="divide-y divide-slate-700/50 text-sm">
+                        <!-- Dynamic rows injected via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Local storage persistence logic (Can be extended to Firebase/Supabase for true cross-device DB sync)
+        let trades = JSON.parse(localStorage.getItem("user_live_trades")) || [];
+
+        const form = document.getElementById("trade-form");
+        const tableBody = document.getElementById("trades-table-body");
+
+        function saveAndRender() {
+            localStorage.setItem("user_live_trades", JSON.stringify(trades));
+            renderTrades();
+        }
+
+        form.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const type = document.getElementById("trade-type").value;
+            const entry = parseFloat(document.getElementById("entry-price").value);
+            const exit = parseFloat(document.getElementById("exit-price").value);
+            const units = parseFloat(document.getElementById("trade-units").value);
+
+            let profit = 0;
+            if (type === "BUY") {
+                profit = (exit - entry) * units;
+            } else {
+                profit = (entry - exit) * units;
+            }
+
+            const newTrade = {
+                id: Date.now(),
+                type,
+                entry,
+                exit,
+                profit: parseFloat(profit.toFixed(2))
+            };
+
+            trades.unshift(newTrade);
+            saveAndRender();
+            form.reset();
+            document.getElementById("trade-units").value = "10000";
+        });
+
+        window.deleteTrade = function(id) {
+            trades = trades.filter(t => t.id !== id);
+            saveAndRender();
+        }
+
+        window.clearTrades = function() {
+            if(confirm("Are you sure you want to clear all trades?")) {
+                trades = [];
+                saveAndRender();
+            }
+        }
+
+        function renderTrades() {
+            tableBody.innerHTML = "";
+            if (trades.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 text-xs">No trades logged yet. Add your first entry above.</td></tr>`;
+                updateMetrics([]);
+                return;
+            }
+
+            trades.forEach(t => {
+                const isWin = t.profit > 0;
+                const row = document.createElement("tr");
+                row.className = "hover:bg-slate-700/30 transition";
+                row.innerHTML = `
+                    <td class="p-3 font-semibold ${t.type === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}">${t.type}</td>
+                    <td class="p-3 font-mono text-slate-300">${t.entry}</td>
+                    <td class="p-3 font-mono text-slate-300">${t.exit}</td>
+                    <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${t.profit >= 0 ? '+' : ''}€${t.profit.toFixed(2)}</td>
+                    <td class="p-3 text-right">
+                        <button onclick="deleteTrade(${t.id})" class="text-xs text-slate-500 hover:text-red-400">Delete</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            updateMetrics(trades);
+        }
+
+        function updateMetrics(data) {
+            const total = data.length;
+            document.getElementById("stat-total").innerText = total;
+
+            if (total === 0) {
+                document.getElementById("stat-winrate").innerText = "0%";
+                document.getElementById("stat-profit").innerText = "€0.00";
+                document.getElementById("stat-pf").innerText = "0.00";
+                return;
+            }
+
+            const wins = data.filter(t => t.profit > 0).length;
+            const winRate = ((wins / total) * 100).toFixed(1);
+            document.getElementById("stat-winrate").innerText = winRate + "%";
+
+            const netProfit = data.reduce((acc, t) => acc + t.profit, 0);
+            const profitElem = document.getElementById("stat-profit");
+            profitElem.innerText = (netProfit >= 0 ? "+€" : "-€") + Math.abs(netProfit).toFixed(2);
+            profitElem.className = `text-2xl font-bold mt-1 ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
+
+            const grossProfit = data.filter(t => t.profit > 0).reduce((acc, t) => acc + t.profit, 0);
+            const grossLoss = Math.abs(data.filter(t => t.profit < 0).reduce((acc, t) => acc + t.profit, 0));
+            
+            let pf = grossLoss === 0 ? (grossProfit > 0 ? 99.9 : 0.0) : (grossProfit / grossLoss);
+            document.getElementById("stat-pf").innerText = pf.toFixed(2);
+        }
+
+        renderTrades();
+    </script>
+</body>
+</html>
