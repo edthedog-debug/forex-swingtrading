@@ -2,9 +2,9 @@ import json
 from datetime import datetime
 import yfinance as yf
 
-# Fetch EUR/USD data from Yahoo Finance (Extended period for deep backtesting)
+# Fetch EUR/USD data (2 years of data required to calculate the 200 SMA context filter)
 ticker = "EURUSD=X"
-data = yf.download(ticker, period="120d", interval="1d", progress=False)
+data = yf.download(ticker, period="2y", interval="1d", progress=False)
 
 if data.empty:
     print("Error: Could not fetch data from Yahoo Finance.")
@@ -17,20 +17,27 @@ if hasattr(data.columns, "levels"):
 dates = data.index.strftime("%Y-%m-%d").tolist()
 closes = [float(c) for c in data["Close"].tolist()]
 
-# Technical Calculations (Optimized: 20-period for Bollinger, 14 for RSI)
+# Technical Parameters
 period_bb = 20
 period_rsi = 14
+period_sma200 = 200
 
+if len(closes) < period_sma200:
+    print("Not enough data for SMA 200")
+    exit(1)
+
+# Current Indicators (20-period for Bollinger, 200 for Macro Trend)
 slice_bb = closes[-period_bb:]
-sma = sum(slice_bb) / period_bb
-variance = sum((x - sma) ** 2 for x in slice_bb) / period_bb
+sma20 = sum(slice_bb) / period_bb
+variance = sum((x - sma20) ** 2 for x in slice_bb) / period_bb
 st_dev = variance ** 0.5
 
-upper_band = round(sma + (2 * st_dev), 4)
-lower_band = round(sma - (2 * st_dev), 4)
+upper_band = round(sma20 + (2 * st_dev), 4)
+lower_band = round(sma20 - (2 * st_dev), 4)
 current_price = closes[-1]
+sma200 = sum(closes[-period_sma200:]) / period_sma200
 
-# RSI Calculation function for dynamic historical accuracy
+# RSI Calculation function
 def calculate_rsi(prices, periods):
     if len(prices) < periods + 1:
         return 50.0
@@ -53,30 +60,33 @@ def calculate_rsi(prices, periods):
 
 rsi = calculate_rsi(closes, period_rsi)
 
-# --- PROBABILISTIC ASYMMETRIC RISK/REWARD LOGIC ---
-# Strategy: High-probability mean reversion with a 1:1.5 Risk-to-Reward ratio
-risk_multiplier = 1.0 # Risk 1 Standard Deviation (Cut losses quickly)
-reward_multiplier = 1.5 # Target 1.5 Standard Deviations (Let profits run)
-
+# --- INSTITUTIONAL FILTERING LOGIC ---
 signal = "NEUTRAL (WAIT)"
 stop_loss = None
 take_profit = None
 
-# Entry logic requires BOTH Bollinger breakout and RSI extreme
-if current_price <= lower_band and rsi < 35:
-    signal = "STRONG BUY"
+risk_multiplier = 1.0
+reward_multiplier = 2.0 # Standard 1:2 R:R, but actively managed via Break-Even
+
+# Context Filter: Trend Identification
+is_uptrend = current_price > sma200
+is_downtrend = current_price < sma200
+
+# Entry logic strictly respects the macro trend context
+if is_uptrend and current_price <= lower_band and rsi < 40:
+    signal = "STRONG BUY (TREND ALIGNED)"
     stop_loss = round(current_price - (st_dev * risk_multiplier), 4)
     take_profit = round(current_price + (st_dev * reward_multiplier), 4)
-elif current_price >= upper_band and rsi > 65:
-    signal = "STRONG SELL"
+elif is_downtrend and current_price >= upper_band and rsi > 60:
+    signal = "STRONG SELL (TREND ALIGNED)"
     stop_loss = round(current_price + (st_dev * risk_multiplier), 4)
     take_profit = round(current_price - (st_dev * reward_multiplier), 4)
 else:
-    # Default safety boundaries when neutral for display purposes
+    # Default boundaries for UI display
     stop_loss = round(current_price - (st_dev * risk_multiplier), 4)
     take_profit = round(current_price + (st_dev * reward_multiplier), 4)
 
-# --- REALISTIC PROBABILISTIC BACKTESTING MODULE ---
+# --- ADVANCED BACKTESTING MODULE (Break-Even & Context Filters) ---
 initial_capital = 10000.0
 capital = initial_capital
 position = 0  
@@ -84,80 +94,106 @@ entry_hist_price = 0.0
 entry_date = ""
 active_sl = 0.0
 active_tp = 0.0
-trades = []
+break_even_triggered = False
 
-for i in range(period_bb, len(closes)):
-    # Historical context
-    h_slice = closes[i - period_bb : i]
-    h_sma = sum(h_slice) / period_bb
-    h_var = sum((x - h_sma) ** 2 for x in h_slice) / period_bb
+trades = []
+peak_capital = initial_capital
+max_drawdown = 0.0
+gross_profit = 0.0
+gross_loss = 0.0
+
+for i in range(period_sma200, len(closes)):
+    # Local context
+    h_slice_bb = closes[i - period_bb : i]
+    h_sma20 = sum(h_slice_bb) / period_bb
+    h_var = sum((x - h_sma20) ** 2 for x in h_slice_bb) / period_bb
     h_std = h_var ** 0.5
-    h_upper = h_sma + (2 * h_std)
-    h_lower = h_sma - (2 * h_std)
-    p_close = closes[i]
+    h_upper = h_sma20 + (2 * h_std)
+    h_lower = h_sma20 - (2 * h_std)
     
+    h_sma200 = sum(closes[i - period_sma200 : i]) / period_sma200
+    p_close = closes[i]
     h_rsi = calculate_rsi(closes[:i+1], period_rsi)
 
-    # STRICT ENTRY
+    # STRICT ENTRY (With Macro Trend Filter)
     if position == 0:
-        if p_close <= h_lower and h_rsi < 35:
+        if p_close > h_sma200 and p_close <= h_lower and h_rsi < 40:
             position = 1
             entry_hist_price = p_close
             entry_date = dates[i]
-            # Set fixed Stop Loss and Take Profit at entry
             active_sl = p_close - (h_std * risk_multiplier)
             active_tp = p_close + (h_std * reward_multiplier)
+            break_even_triggered = False
             
-        elif p_close >= h_upper and h_rsi > 65:
+        elif p_close < h_sma200 and p_close >= h_upper and h_rsi > 60:
             position = -1
             entry_hist_price = p_close
             entry_date = dates[i]
-            # Set fixed Stop Loss and Take Profit at entry (inverted for short)
             active_sl = p_close + (h_std * risk_multiplier)
             active_tp = p_close - (h_std * reward_multiplier)
+            break_even_triggered = False
     
-    # REALISTIC EXITS (Hits Stop Loss OR Take Profit)
-    elif position == 1: # LONG POSITION
+    # DYNAMIC EXITS
+    elif position == 1: 
+        # Break-Even trigger: If price moves 1 Risk unit in favor, move SL to Entry
+        if not break_even_triggered and p_close >= entry_hist_price + (h_std * risk_multiplier):
+            active_sl = entry_hist_price 
+            break_even_triggered = True
+            
         if p_close <= active_sl or p_close >= active_tp:
             profit = (p_close - entry_hist_price) * 10000
             capital += profit
             trades.append({
-                "entry": entry_date,
-                "exit": dates[i],
-                "type": "BUY",
-                "entryPrice": round(entry_hist_price, 4),
-                "exitPrice": round(p_close, 4),
+                "entry": entry_date, "exit": dates[i], "type": "BUY",
+                "entryPrice": round(entry_hist_price, 4), "exitPrice": round(p_close, 4),
                 "profit": round(profit, 2)
             })
             position = 0
 
-    elif position == -1: # SHORT POSITION
+    elif position == -1: 
+        # Break-Even trigger for Short
+        if not break_even_triggered and p_close <= entry_hist_price - (h_std * risk_multiplier):
+            active_sl = entry_hist_price
+            break_even_triggered = True
+
         if p_close >= active_sl or p_close <= active_tp:
             profit = (entry_hist_price - p_close) * 10000
             capital += profit
             trades.append({
-                "entry": entry_date,
-                "exit": dates[i],
-                "type": "SELL",
-                "entryPrice": round(entry_hist_price, 4),
-                "exitPrice": round(p_close, 4),
+                "entry": entry_date, "exit": dates[i], "type": "SELL",
+                "entryPrice": round(entry_hist_price, 4), "exitPrice": round(p_close, 4),
                 "profit": round(profit, 2)
             })
             position = 0
 
-# Calculate real probabilistic metrics
+    # Drawdown Calculation
+    if capital > peak_capital:
+        peak_capital = capital
+    current_dd = (peak_capital - capital) / peak_capital * 100
+    if current_dd > max_drawdown:
+        max_drawdown = current_dd
+
+# Institutional Metrics Processing
+for t in trades:
+    if t["profit"] > 0:
+        gross_profit += t["profit"]
+    else:
+        gross_loss += abs(t["profit"])
+
 winning_trades = [t for t in trades if t["profit"] > 0]
 win_rate = round((len(winning_trades) / len(trades)) * 100, 1) if trades else 0.0
 total_return = round(((capital - initial_capital) / initial_capital) * 100, 2)
+profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else 0.0
 
 output = {
     "lastUpdate": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
     "currentPrice": round(current_price, 4),
-    "dates": dates[-60:], # Return only 60 days to keep UI fast
+    "dates": dates[-60:], 
     "prices": closes[-60:],
     "upperBand": upper_band,
     "lowerBand": lower_band,
-    "sma": round(sma, 4),
+    "sma": round(sma20, 4),
+    "sma200": round(sma200, 4),
     "rsi": rsi,
     "signal": signal,
     "stopLoss": stop_loss,
@@ -167,11 +203,12 @@ output = {
         "finalCapital": round(capital, 2),
         "totalReturn": total_return,
         "winRate": win_rate,
-        "trades": trades[-5:] # Show last 5 trades
+        "maxDrawdown": round(max_drawdown, 2),
+        "profitFactor": profit_factor,
+        "totalTrades": len(trades),
+        "trades": trades[-5:]
     }
 }
 
 with open("data.json", "w") as f:
     json.dump(output, f, indent=4)
-
-print("Successfully generated data.json with probabilistic risk management.")
