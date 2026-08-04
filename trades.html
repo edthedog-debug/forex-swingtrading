@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Trade Journal & Performance Tracker</title>
+    <title>Cloud Trade Journal - Google Sheets Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans min-p-6 p-4">
+<body class="bg-slate-900 text-slate-100 font-sans p-4">
     <div class="max-w-4xl mx-auto space-y-6">
         
         <!-- Header -->
         <header class="flex justify-between items-center border-b border-slate-800 pb-4">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-emerald-400">Live Trade Journal</h1>
-                <p class="text-sm text-slate-400">Log entries & exits, track wins/losses, persistent across devices.</p>
+                <h1 class="text-2xl font-bold tracking-tight text-emerald-400">Cloud Trade Journal</h1>
+                <p class="text-sm text-slate-400">Synced directly with your Google Sheets database.</p>
             </div>
             <a href="index.html" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded font-medium text-slate-300">Back to Dashboard</a>
         </header>
@@ -62,7 +62,7 @@
                     <input type="number" id="trade-units" value="10000" required class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
                 </div>
                 <div class="flex items-end">
-                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded text-sm transition">Add Trade</button>
+                    <button type="submit" id="submit-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-4 rounded text-sm transition">Add Trade</button>
                 </div>
             </form>
         </div>
@@ -70,7 +70,7 @@
         <!-- Trades Table History -->
         <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-lg">
             <div class="p-4 border-b border-slate-700 flex justify-between items-center">
-                <h3 class="font-semibold text-slate-200">Logged History</h3>
+                <h3 class="font-semibold text-slate-200">Cloud Database History</h3>
                 <button onclick="clearTrades()" class="text-xs text-red-400 hover:text-red-300 font-medium">Clear All</button>
             </div>
             <div class="overflow-x-auto">
@@ -85,7 +85,7 @@
                         </tr>
                     </thead>
                     <tbody id="trades-table-body" class="divide-y divide-slate-700/50 text-sm">
-                        <!-- Dynamic rows injected via JS -->
+                        <tr><td colspan="5" class="p-4 text-center text-slate-500 text-xs">Loading data from Google Sheets...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -94,32 +94,36 @@
     </div>
 
     <script>
-        // Local storage persistence logic (Can be extended to Firebase/Supabase for true cross-device DB sync)
-        let trades = JSON.parse(localStorage.getItem("user_live_trades")) || [];
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEXd4jsBe2dtW4qDl5-1sIo5WgpP1O7Fea_SPkHp92c99tNjov88E-UqH34LlFxjq9/exec"; 
+        let trades = [];
 
-        const form = document.getElementById("trade-form");
-        const tableBody = document.getElementById("trades-table-body");
-
-        function saveAndRender() {
-            localStorage.setItem("user_live_trades", JSON.stringify(trades));
-            renderTrades();
+        async function fetchTrades() {
+            try {
+                const response = await fetch(WEB_APP_URL);
+                trades = await response.json();
+                renderTrades();
+            } catch (error) {
+                console.error("Error fetching trades:", error);
+                document.getElementById("trades-table-body").innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-400 text-xs">Error connecting to Google Sheets database.</td></tr>`;
+            }
         }
 
-        form.addEventListener("submit", (e) => {
+        const form = document.getElementById("trade-form");
+        form.addEventListener("submit", async (e) => {
             e.preventDefault();
+            const btn = document.getElementById("submit-btn");
+            btn.innerText = "Saving...";
+            btn.disabled = true;
+
             const type = document.getElementById("trade-type").value;
             const entry = parseFloat(document.getElementById("entry-price").value);
             const exit = parseFloat(document.getElementById("exit-price").value);
             const units = parseFloat(document.getElementById("trade-units").value);
 
-            let profit = 0;
-            if (type === "BUY") {
-                profit = (exit - entry) * units;
-            } else {
-                profit = (entry - exit) * units;
-            }
+            let profit = type === "BUY" ? (exit - entry) * units : (entry - exit) * units;
 
             const newTrade = {
+                action: "add",
                 id: Date.now(),
                 type,
                 entry,
@@ -127,28 +131,44 @@
                 profit: parseFloat(profit.toFixed(2))
             };
 
-            trades.unshift(newTrade);
-            saveAndRender();
+            await fetch(WEB_APP_URL, {
+                method: "POST",
+                body: JSON.stringify(newTrade)
+            });
+
             form.reset();
             document.getElementById("trade-units").value = "10000";
+            btn.innerText = "Add Trade";
+            btn.disabled = false;
+            fetchTrades();
         });
 
-        window.deleteTrade = function(id) {
-            trades = trades.filter(t => t.id !== id);
-            saveAndRender();
+        window.deleteTrade = async function(id) {
+            if(confirm("Delete this trade from Google Sheets?")) {
+                await fetch(WEB_APP_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "delete", id: id })
+                });
+                fetchTrades();
+            }
         }
 
-        window.clearTrades = function() {
-            if(confirm("Are you sure you want to clear all trades?")) {
-                trades = [];
-                saveAndRender();
+        window.clearTrades = async function() {
+            if(confirm("Are you sure you want to clear all trades from the database?")) {
+                await fetch(WEB_APP_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "clear" })
+                });
+                fetchTrades();
             }
         }
 
         function renderTrades() {
+            const tableBody = document.getElementById("trades-table-body");
             tableBody.innerHTML = "";
+            
             if (trades.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 text-xs">No trades logged yet. Add your first entry above.</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 text-xs">No trades found in Google Sheets. Add your first entry above.</td></tr>`;
                 updateMetrics([]);
                 return;
             }
@@ -161,7 +181,7 @@
                     <td class="p-3 font-semibold ${t.type === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}">${t.type}</td>
                     <td class="p-3 font-mono text-slate-300">${t.entry}</td>
                     <td class="p-3 font-mono text-slate-300">${t.exit}</td>
-                    <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${t.profit >= 0 ? '+' : ''}€${t.profit.toFixed(2)}</td>
+                    <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${t.profit >= 0 ? '+' : ''}€${parseFloat(t.profit).toFixed(2)}</td>
                     <td class="p-3 text-right">
                         <button onclick="deleteTrade(${t.id})" class="text-xs text-slate-500 hover:text-red-400">Delete</button>
                     </td>
@@ -183,23 +203,24 @@
                 return;
             }
 
-            const wins = data.filter(t => t.profit > 0).length;
+            const wins = data.filter(t => Number(t.profit) > 0).length;
             const winRate = ((wins / total) * 100).toFixed(1);
             document.getElementById("stat-winrate").innerText = winRate + "%";
 
-            const netProfit = data.reduce((acc, t) => acc + t.profit, 0);
+            const netProfit = data.reduce((acc, t) => acc + Number(t.profit), 0);
             const profitElem = document.getElementById("stat-profit");
             profitElem.innerText = (netProfit >= 0 ? "+€" : "-€") + Math.abs(netProfit).toFixed(2);
             profitElem.className = `text-2xl font-bold mt-1 ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
 
-            const grossProfit = data.filter(t => t.profit > 0).reduce((acc, t) => acc + t.profit, 0);
-            const grossLoss = Math.abs(data.filter(t => t.profit < 0).reduce((acc, t) => acc + t.profit, 0));
+            const grossProfit = data.filter(t => Number(t.profit) > 0).reduce((acc, t) => acc + Number(t.profit), 0);
+            const grossLoss = Math.abs(data.filter(t => Number(t.profit) < 0).reduce((acc, t) => acc + Number(t.profit), 0));
             
             let pf = grossLoss === 0 ? (grossProfit > 0 ? 99.9 : 0.0) : (grossProfit / grossLoss);
             document.getElementById("stat-pf").innerText = pf.toFixed(2);
         }
 
-        renderTrades();
+        // Initial load
+        fetchTrades();
     </script>
 </body>
 </html>
