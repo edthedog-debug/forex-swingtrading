@@ -10,17 +10,14 @@ if data.empty:
     print("Error: Could not fetch data from Yahoo Finance.")
     exit(1)
 
-# Flatten columns if multi-index (yfinance update behavior)
+# Flatten columns if multi-index
 if hasattr(data.columns, "levels"):
     data.columns = data.columns.get_level_values(0)
 
 dates = data.index.strftime("%Y-%m-%d").tolist()
-closes = data["Close"].tolist()
+closes = [float(c) for c in data["Close"].tolist()]
 
-# Ensure standard Python floats
-closes = [float(c) for c in closes]
-
-# Simple Technical Calculations (SMA, Bollinger Bands, RSI)
+# Technical Calculations (SMA, Bollinger Bands, RSI)
 period = 14
 slice_prices = closes[-period:]
 sma = sum(slice_prices) / period
@@ -31,7 +28,7 @@ upper_band = round(sma + (2 * st_dev), 4)
 lower_band = round(sma - (2 * st_dev), 4)
 current_price = closes[-1]
 
-# Simple RSI approximation
+# RSI Calculation
 gains = [
     closes[i] - closes[i - 1]
     for i in range(len(closes) - period, len(closes))
@@ -47,12 +44,25 @@ avg_loss = sum(losses) / period if losses else 0
 rs = avg_gain / avg_loss if avg_loss > 0 else 100
 rsi = round(100 - (100 / (1 + rs)), 1)
 
-# Signal Logic
+# Volatility-based Stop Loss & Take Profit Multipliers
+sl_multiplier = 1.5
+tp_multiplier = 2.5
+
 signal = "NEUTRAL"
+stop_loss = None
+take_profit = None
+
 if current_price <= lower_band or rsi < 42:
     signal = "BUY (LONG)"
+    stop_loss = round(current_price - (st_dev * sl_multiplier), 4)
+    take_profit = round(current_price + (st_dev * tp_multiplier), 4)
 elif current_price >= upper_band or rsi > 60:
     signal = "SELL (SHORT)"
+    stop_loss = round(current_price + (st_dev * sl_multiplier), 4)
+    take_profit = round(current_price - (st_dev * tp_multiplier), 4)
+else:
+    stop_loss = round(current_price - (st_dev * sl_multiplier), 4)
+    take_profit = round(current_price + (st_dev * tp_multiplier), 4)
 
 output = {
     "lastUpdate": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -64,9 +74,11 @@ output = {
     "sma": round(sma, 4),
     "rsi": rsi,
     "signal": signal,
+    "stopLoss": stop_loss,
+    "takeProfit": take_profit,
 }
 
 with open("data.json", "w") as f:
     json.dump(output, f, indent=4)
 
-print("Successfully generated data.json from Yahoo Finance.")
+print("Successfully generated data.json with volatility metrics.")
