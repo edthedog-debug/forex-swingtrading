@@ -17,7 +17,7 @@ if hasattr(data.columns, "levels"):
 dates = data.index.strftime("%Y-%m-%d").tolist()
 closes = [float(c) for c in data["Close"].tolist()]
 
-# Technical Calculations (SMA, Bollinger Bands, RSI)
+# Technical Calculations & Momentum Filters
 period = 14
 slice_prices = closes[-period:]
 sma = sum(slice_prices) / period
@@ -27,6 +27,10 @@ st_dev = variance ** 0.5
 upper_band = round(sma + (2 * st_dev), 4)
 lower_band = round(sma - (2 * st_dev), 4)
 current_price = closes[-1]
+
+# Short-term Momentum (Fast vs Slow EMA approximation via slices)
+ema_fast = sum(closes[-5:]) / 5
+ema_slow = sum(closes[-10:]) / 10
 
 # RSI Calculation
 gains = [
@@ -44,19 +48,20 @@ avg_loss = sum(losses) / period if losses else 0
 rs = avg_gain / avg_loss if avg_loss > 0 else 100
 rsi = round(100 - (100 / (1 + rs)), 1)
 
-# Volatility-based Stop Loss & Take Profit Multipliers
-sl_multiplier = 1.5
-tp_multiplier = 2.5
+# Optimized Risk Management (Tight Stop Loss & High Probability Take Profit)
+sl_multiplier = 0.8  # Stop loss más ajustado para cortar pérdidas al instante
+tp_multiplier = 1.2  # Take profit optimizado para asegurar cierres ganadores rápidos
 
 signal = "NEUTRAL"
 stop_loss = None
 take_profit = None
 
-if current_price <= lower_band or rsi < 42:
+# High-Precision Filters for Maximum Winning Trades
+if (ema_fast > ema_slow and rsi > 45 and rsi < 65) or current_price <= lower_band:
     signal = "BUY (LONG)"
     stop_loss = round(current_price - (st_dev * sl_multiplier), 4)
     take_profit = round(current_price + (st_dev * tp_multiplier), 4)
-elif current_price >= upper_band or rsi > 60:
+elif (ema_fast < ema_slow and rsi < 55 and rsi > 35) or current_price >= upper_band:
     signal = "SELL (SHORT)"
     stop_loss = round(current_price + (st_dev * sl_multiplier), 4)
     take_profit = round(current_price - (st_dev * tp_multiplier), 4)
@@ -64,10 +69,10 @@ else:
     stop_loss = round(current_price - (st_dev * sl_multiplier), 4)
     take_profit = round(current_price + (st_dev * tp_multiplier), 4)
 
-# --- BACKTESTING MODULE ---
+# --- ADVANCED BACKTESTING MODULE (Optimized for High Win Rate) ---
 initial_capital = 10000.0
 capital = initial_capital
-position = 0  # 0: None, 1: Long, -1: Short
+position = 0  
 entry_hist_price = 0.0
 entry_date = ""
 trades = []
@@ -80,6 +85,9 @@ for i in range(period, len(closes)):
     h_upper = h_sma + (2 * h_std)
     h_lower = h_sma - (2 * h_std)
     p_close = closes[i]
+    
+    h_ema_fast = sum(closes[i-5:i]) / 5
+    h_ema_slow = sum(closes[i-10:i]) / 10
 
     h_gains = [
         closes[j] - closes[j - 1]
@@ -97,18 +105,17 @@ for i in range(period, len(closes)):
     h_rsi = 100 - (100 / (1 + h_rs))
 
     if position == 0:
-        if p_close <= h_lower or h_rsi < 42:
+        if (h_ema_fast > h_ema_slow and 45 < h_rsi < 65) or p_close <= h_lower:
             position = 1
             entry_hist_price = p_close
             entry_date = dates[i]
-        elif p_close >= h_upper or h_rsi > 60:
+        elif (h_ema_fast < h_ema_slow and 35 < h_rsi < 55) or p_close >= h_upper:
             position = -1
             entry_hist_price = p_close
             entry_date = dates[i]
     elif position == 1:
-        if p_close >= h_upper or p_close <= entry_hist_price - (
-            h_std * sl_multiplier
-        ):
+        # Check Take Profit or tight Stop Loss for immediate filtering of winning trades
+        if p_close >= entry_hist_price + (h_std * tp_multiplier) or p_close <= entry_hist_price - (h_std * sl_multiplier):
             profit = (p_close - entry_hist_price) * 10000
             capital += profit
             trades.append(
@@ -123,9 +130,7 @@ for i in range(period, len(closes)):
             )
             position = 0
     elif position == -1:
-        if p_close <= h_lower or p_close >= entry_hist_price + (
-            h_std * sl_multiplier
-        ):
+        if p_close <= entry_hist_price - (h_std * tp_multiplier) or p_close >= entry_hist_price + (h_std * sl_multiplier):
             profit = (entry_hist_price - p_close) * 10000
             capital += profit
             trades.append(
@@ -170,4 +175,4 @@ output = {
 with open("data.json", "w") as f:
     json.dump(output, f, indent=4)
 
-print("Successfully generated data.json with backtesting and volatility metrics.")
+print("Successfully generated data.json with high-winrate momentum strategy.")
