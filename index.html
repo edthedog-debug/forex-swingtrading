@@ -171,6 +171,31 @@
             </div>
         </div>
 
+        <div class="card" style="margin-top: 25px;">
+            <h5>🧪 Strategy Backtesting Results (Historical Simulation)</h5>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                <div><small style="color: var(--text-muted);">Initial Capital</small><h4 id="bt-initial" style="margin:5px 0 0 0;">€10,000</h4></div>
+                <div><small style="color: var(--text-muted);">Final Capital</small><h4 id="bt-final" style="margin:5px 0 0 0;">-</h4></div>
+                <div><small style="color: var(--text-muted);">Total Return</small><h4 id="bt-return" style="margin:5px 0 0 0;">-</h4></div>
+                <div><small style="color: var(--text-muted);">Win Rate</small><h4 id="bt-winrate" style="margin:5px 0 0 0;">-</h4></div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Entry Date</th>
+                        <th>Exit Date</th>
+                        <th>Type</th>
+                        <th>Entry Price</th>
+                        <th>Exit Price</th>
+                        <th>Profit (€)</th>
+                    </tr>
+                </thead>
+                <tbody id="backtest-table">
+                    <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading backtest results...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <footer>
             Educational Swing Trading Simulator. Not financial advice. Built for GitHub Pages.
         </footer>
