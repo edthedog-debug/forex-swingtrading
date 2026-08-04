@@ -56,6 +56,37 @@ async function fetchRealData() {
         `;
         document.getElementById("signals-table").innerHTML = tableHtml;
 
+        // Backtest Data Rendering
+        const bt = data.backtest;
+        if (bt) {
+            document.getElementById("bt-final").innerText = "€" + bt.finalCapital.toLocaleString();
+            const returnElem = document.getElementById("bt-return");
+            returnElem.innerText = (bt.totalReturn >= 0 ? "+" : "") + bt.totalReturn + "%";
+            returnElem.style.color = bt.totalReturn >= 0 ? "var(--accent-green)" : "var(--accent-red)";
+            
+            document.getElementById("bt-winrate").innerText = bt.winRate + "%";
+
+            let btTableHtml = "";
+            if (bt.trades && bt.trades.length > 0) {
+                bt.trades.forEach(t => {
+                    const profitColor = t.profit >= 0 ? "var(--accent-green)" : "var(--accent-red)";
+                    btTableHtml += `
+                        <tr>
+                            <td>${t.entry}</td>
+                            <td>${t.exit}</td>
+                            <td class="${t.type === 'BUY' ? 'badge-buy' : 'badge-sell'}">${t.type}</td>
+                            <td>${t.entryPrice}</td>
+                            <td>${t.exitPrice}</td>
+                            <td style="color: ${profitColor}; font-weight: bold;">€${t.profit.toLocaleString()}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                btTableHtml = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No completed trades in current period.</td></tr>`;
+            }
+            document.getElementById("backtest-table").innerHTML = btTableHtml;
+        }
+
         // Render Chart
         renderChart(dates, prices, upperBand, lowerBand, sma);
 
