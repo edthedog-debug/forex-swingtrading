@@ -64,6 +64,88 @@ else:
     stop_loss = round(current_price - (st_dev * sl_multiplier), 4)
     take_profit = round(current_price + (st_dev * tp_multiplier), 4)
 
+# --- BACKTESTING MODULE ---
+initial_capital = 10000.0
+capital = initial_capital
+position = 0  # 0: None, 1: Long, -1: Short
+entry_hist_price = 0.0
+entry_date = ""
+trades = []
+
+for i in range(period, len(closes)):
+    hist_slice = closes[i - period : i]
+    h_sma = sum(hist_slice) / period
+    h_var = sum((x - h_sma) ** 2 for x in hist_slice) / period
+    h_std = h_var ** 0.5
+    h_upper = h_sma + (2 * h_std)
+    h_lower = h_sma - (2 * h_std)
+    p_close = closes[i]
+
+    h_gains = [
+        closes[j] - closes[j - 1]
+        for j in range(i - period, i)
+        if closes[j] > closes[j - 1]
+    ]
+    h_losses = [
+        closes[j - 1] - closes[j]
+        for j in range(i - period, i)
+        if closes[j] < closes[j - 1]
+    ]
+    h_ag = sum(h_gains) / period if h_gains else 0
+    h_al = sum(h_losses) / period if h_losses else 0
+    h_rs = h_ag / h_al if h_al > 0 else 100
+    h_rsi = 100 - (100 / (1 + h_rs))
+
+    if position == 0:
+        if p_close <= h_lower or h_rsi < 42:
+            position = 1
+            entry_hist_price = p_close
+            entry_date = dates[i]
+        elif p_close >= h_upper or h_rsi > 60:
+            position = -1
+            entry_hist_price = p_close
+            entry_date = dates[i]
+    elif position == 1:
+        if p_close >= h_upper or p_close <= entry_hist_price - (
+            h_std * sl_multiplier
+        ):
+            profit = (p_close - entry_hist_price) * 10000
+            capital += profit
+            trades.append(
+                {
+                    "entry": entry_date,
+                    "exit": dates[i],
+                    "type": "BUY",
+                    "entryPrice": round(entry_hist_price, 4),
+                    "exitPrice": round(p_close, 4),
+                    "profit": round(profit, 2),
+                }
+            )
+            position = 0
+    elif position == -1:
+        if p_close <= h_lower or p_close >= entry_hist_price + (
+            h_std * sl_multiplier
+        ):
+            profit = (entry_hist_price - p_close) * 10000
+            capital += profit
+            trades.append(
+                {
+                    "entry": entry_date,
+                    "exit": dates[i],
+                    "type": "SELL",
+                    "entryPrice": round(entry_hist_price, 4),
+                    "exitPrice": round(p_close, 4),
+                    "profit": round(profit, 2),
+                }
+            )
+            position = 0
+
+winning_trades = [t for t in trades if t["profit"] > 0]
+win_rate = (
+    round((len(winning_trades) / len(trades)) * 100, 1) if trades else 0.0
+)
+total_return = round(((capital - initial_capital) / initial_capital) * 100, 2)
+
 output = {
     "lastUpdate": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
     "currentPrice": round(current_price, 4),
@@ -76,9 +158,16 @@ output = {
     "signal": signal,
     "stopLoss": stop_loss,
     "takeProfit": take_profit,
+    "backtest": {
+        "initialCapital": initial_capital,
+        "finalCapital": round(capital, 2),
+        "totalReturn": total_return,
+        "winRate": win_rate,
+        "trades": trades[-5:],
+    },
 }
 
 with open("data.json", "w") as f:
     json.dump(output, f, indent=4)
 
-print("Successfully generated data.json with volatility metrics.")
+print("Successfully generated data.json with backtesting and volatility metrics.")
