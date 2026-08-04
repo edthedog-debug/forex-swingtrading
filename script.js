@@ -1,4 +1,3 @@
-// EUR/USD Swing Trading Real Data Engine
 document.addEventListener("DOMContentLoaded", () => {
     fetchRealData();
 });
@@ -18,38 +17,29 @@ async function fetchRealData() {
         const sma = data.sma;
         const rsi = data.rsi;
         const signal = data.signal;
+        const stopLoss = data.stopLoss;
+        const takeProfit = data.takeProfit;
         
-        // Determine styling based on signal
         let compositeSignalText = "50% Range Bound";
         let compositeColor = "#3b82f6";
-        let entryPrice = "-";
-        let exitPrice = "-";
 
         if (signal.includes("BUY")) {
             compositeSignalText = "78% Strong Buy";
             compositeColor = "#10b981";
-            entryPrice = currentPrice;
-            exitPrice = upperBand;
         } else if (signal.includes("SELL")) {
             compositeSignalText = "72% Strong Sell";
             compositeColor = "#ef4444";
-            entryPrice = currentPrice;
-            exitPrice = lowerBand;
-        } else {
-            entryPrice = Number((currentPrice - 0.0020).toFixed(4));
-            exitPrice = Number((currentPrice + 0.0020).toFixed(4));
         }
 
         // Update DOM Metrics
         document.getElementById("current-price").innerText = currentPrice;
         document.getElementById("composite-signal").innerText = compositeSignalText;
         document.getElementById("composite-signal").style.color = compositeColor;
-        document.getElementById("entry-price").innerText = entryPrice;
-        document.getElementById("exit-price").innerText = exitPrice;
+        document.getElementById("stop-loss").innerText = stopLoss;
+        document.getElementById("take-profit").innerText = takeProfit;
         
         const stDev = (upperBand - sma) / 2;
         document.getElementById("stat-vol").innerText = (stDev * 100).toFixed(3) + "%";
-        document.getElementById("stat-return").innerText = "+0.25% (3d est)";
         document.getElementById("stat-rsi").innerText = rsi;
         document.getElementById("stat-macd").innerText = rsi > 55 ? "Bullish Crossover" : (rsi < 45 ? "Bearish Crossover" : "Consolidation");
 
@@ -59,17 +49,19 @@ async function fetchRealData() {
                 <td>${dates[dates.length - 1]}</td>
                 <td class="${signal.includes('BUY') ? 'badge-buy' : (signal.includes('SELL') ? 'badge-sell' : '')}">${signal}</td>
                 <td>${currentPrice}</td>
+                <td style="color: var(--accent-red);">${stopLoss}</td>
+                <td style="color: var(--accent-green);">${takeProfit}</td>
                 <td>${rsi}</td>
             </tr>
         `;
         document.getElementById("signals-table").innerHTML = tableHtml;
 
-        // Render Chart.js Graph
+        // Render Chart
         renderChart(dates, prices, upperBand, lowerBand, sma);
 
     } catch (error) {
         console.error("Error loading market data:", error);
-        document.getElementById("signals-table").innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--accent-red);">Waiting for GitHub Actions update (data.json missing)...</td></tr>`;
+        document.getElementById("signals-table").innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-red);">Waiting for GitHub Actions update (data.json missing)...</td></tr>`;
     }
 }
 
