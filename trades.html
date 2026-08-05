@@ -145,17 +145,14 @@
         let isFetching = false;
         let pendingCloseIds = new Set();
 
-        // Cleans price strings contaminated by Google Sheets ISO Date formatting
         function parsePrice(val) {
             if (val === null || val === undefined || val === "" || val === "-") return 0;
             let str = String(val).trim();
-            
             if (str.includes("T") || str.includes("-01-01")) {
                 let firstPart = str.split("-")[0];
                 let num = parseFloat(firstPart);
                 if (!isNaN(num) && num > 100) return num / 10000;
             }
-            
             let cleaned = str.replace(/[^0-9.-]/g, '');
             let num = parseFloat(cleaned);
             return isNaN(num) ? 0 : num;
@@ -167,7 +164,9 @@
             return p > 0 ? p.toString() : "-";
         }
 
-        async function loadAllData() {
+        // Added force flag to allow manual Retry button click to bypass locked states
+        async function loadAllData(force = false) {
+            if (force) isFetching = false;
             if (isFetching) return;
             isFetching = true;
             try {
@@ -236,6 +235,11 @@
                 badge.innerText = `${suggestedTrend} Target: ${displayCustomTp}`;
                 badge.className = `text-xs font-bold ${suggestedTrend === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}`;
                 document.getElementById("live-market-display").innerText = displayMarketPrice;
+
+                // Dynamically update form placeholders in real time
+                document.getElementById("entry-price").placeholder = displayMarketPrice;
+                document.getElementById("tp-price").placeholder = displayCustomTp;
+                document.getElementById("sl-price").placeholder = displayCustomSl;
 
             } catch (error) {
                 console.warn("JSON fetch error:", error);
@@ -319,7 +323,7 @@
                 document.getElementById("trades-table-body").innerHTML = `
                     <tr><td colspan="7" class="p-4 text-center text-amber-400 text-xs">
                         Error connecting to Google Sheets. 
-                        <button onclick="loadAllData()" class="underline ml-2 font-bold">Retry</button>
+                        <button onclick="loadAllData(true)" class="underline ml-2 font-bold cursor-pointer hover:text-amber-300">Retry</button>
                     </td></tr>`;
                 trades = [];
                 updateMetrics([]);
@@ -358,7 +362,7 @@
                     document.getElementById("trade-units").value = UNITS_DEFAULT;
                     btn.innerText = "Open Trade";
                     btn.disabled = false;
-                    loadAllData();
+                    loadAllData(true);
                 }, 1000);
 
             } catch (err) {
@@ -392,7 +396,7 @@
                     method: "GET",
                     redirect: "follow"
                 });
-                setTimeout(loadAllData, 1000);
+                setTimeout(() => loadAllData(true), 1000);
             } catch (err) {
                 console.error("Close error:", err);
             } finally {
@@ -432,7 +436,7 @@
                     method: "GET",
                     redirect: "follow"
                 });
-                setTimeout(loadAllData, 1000);
+                setTimeout(() => loadAllData(true), 1000);
             }
         }
 
