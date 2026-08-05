@@ -290,7 +290,6 @@
             }
         });
 
-        // Manual Close Function for Open Positions
         window.closeTradeManual = async function(id) {
             const trade = trades.find(t => t.id == id);
             if (!trade) return;
@@ -368,7 +367,7 @@
                 let displayExit = t.exit;
 
                 if (isOpen) {
-                    currentProfit = t.type === "BUY" ? (currentMarketPrice - t.entry) * UNITS_DEFAULT : (trade.entry - currentMarketPrice) * UNITS_DEFAULT;
+                    currentProfit = t.type === "BUY" ? (currentMarketPrice - t.entry) * UNITS_DEFAULT : (t.entry - currentMarketPrice) * UNITS_DEFAULT;
                     displayExit = `<span class="text-blue-400">${currentMarketPrice.toFixed(4)} (Live)</span>`;
                 }
 
@@ -385,7 +384,7 @@
                     <td class="p-3 font-mono text-slate-300">${displayExit}</td>
                     <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${currentProfit >= 0 ? '+' : ''}€${parseFloat(currentProfit).toFixed(2)}</td>
                     <td class="p-3 text-right">
-                        ${isOpen ? `<button onclick="closeTradeManual(${t.id})" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded font-semibold transition shadow">Close Position</button>` : `<span class="text-xs text-slate-500">Done</span>`}
+                        ${isOpen ? `<button onclick="closeTradeManual(${t.id})" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded">Close</button>` : `<span class="text-xs text-slate-500">Done</span>`}
                     </td>
                 `;
                 tableBody.appendChild(row);
