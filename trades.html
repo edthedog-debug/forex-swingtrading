@@ -13,7 +13,7 @@
         <header class="flex justify-between items-center border-b border-slate-800 pb-4">
             <div>
                 <h1 class="text-2xl font-bold tracking-tight text-emerald-400">Cloud Trade Journal</h1>
-                <p class="text-sm text-slate-400">Dashboard predictions sync & Google Sheets database.</p>
+                <p class="text-sm text-slate-400">Synced with https://edthedog-debug.github.io/forex-swingtrading/ & Google Sheets.</p>
             </div>
             <a href="index.html" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded font-medium text-slate-300">Back to Dashboard</a>
         </header>
@@ -41,8 +41,8 @@
         <!-- Market Price & AI Suggestion Banner -->
         <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
-                <h2 class="text-sm font-semibold text-slate-200">Dashboard Prediction Feed (from data.json)</h2>
-                <p id="market-source-info" class="text-xs text-slate-400">Analyzing market trends and prediction models...</p>
+                <h2 class="text-sm font-semibold text-slate-200">Forex Swing Trading Feed (data.json)</h2>
+                <p id="market-source-info" class="text-xs text-slate-400">Analyzing live direction and targets...</p>
             </div>
             <div class="flex items-center gap-3">
                 <div class="text-right">
@@ -59,7 +59,7 @@
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-lg font-semibold text-slate-200">Open New Position</h2>
                 <button type="button" onclick="applyDashboardSuggestion()" class="text-xs bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-600 text-emerald-300 px-3 py-1.5 rounded-lg font-medium transition">
-                    ⚡ Load Dashboard Suggestion
+                    ⚡ Load Swing Suggestion
                 </button>
             </div>
             
@@ -127,6 +127,8 @@
         let currentMarketPrice = 1.1500;
         let predictedTargetPrice = 1.1600;
         let suggestedTrend = "BUY";
+        let customTp = 0;
+        let customSl = 0;
         const UNITS_DEFAULT = 10000;
 
         async function loadAllData() {
@@ -136,24 +138,33 @@
 
         async function fetchMarketPriceFromJson() {
             try {
-                const response = await fetch("data.json?t=" + Date.now());
+                const response = await fetch("https://edthedog-debug.github.io/forex-swingtrading/data.json?t=" + Date.now(), { mode: 'cors' });
                 if (!response.ok) throw new Error("File not found");
                 const jsonData = await response.json();
                 
                 let foundPrice = null;
                 let foundPrediction = null;
+                let explicitSignal = null;
+                let parsedTp = null;
+                let parsedSl = null;
 
                 if (Array.isArray(jsonData) && jsonData.length > 0) {
                     const last = jsonData[jsonData.length - 1];
                     if (typeof last === 'object' && last !== null) {
                         foundPrice = Number(last.price || last.close || last.value || last.c || Object.values(last).find(v => typeof v === 'number'));
                         foundPrediction = Number(last.prediction || last.target || last.p || last.forecast);
+                        explicitSignal = last.signal || last.trend || last.direction || last.action;
+                        parsedTp = Number(last.tp || last.takeProfit);
+                        parsedSl = Number(last.sl || last.stopLoss);
                     } else if (typeof last === 'number') {
                         foundPrice = last;
                     }
                 } else if (typeof jsonData === 'object' && jsonData !== null) {
                     foundPrice = Number(jsonData.price || jsonData.close || jsonData.value);
                     foundPrediction = Number(jsonData.prediction || jsonData.target);
+                    explicitSignal = jsonData.signal || jsonData.trend || jsonData.direction || jsonData.action;
+                    parsedTp = Number(jsonData.tp || jsonData.takeProfit);
+                    parsedSl = Number(jsonData.sl || jsonData.stopLoss);
                 }
 
                 if (!isNaN(foundPrice) && foundPrice > 0) {
@@ -162,21 +173,42 @@
 
                 if (!isNaN(foundPrediction) && foundPrediction > 0) {
                     predictedTargetPrice = foundPrediction;
-                } else {
-                    predictedTargetPrice = currentMarketPrice >= 1.15 ? currentMarketPrice + 0.0080 : currentMarketPrice - 0.0080;
                 }
 
-                suggestedTrend = predictedTargetPrice >= currentMarketPrice ? "BUY" : "SELL";
+                // Determine trend accurately matching forex-swingtrading direction logic
+                if (explicitSignal) {
+                    const sigStr = String(explicitSignal).toUpperCase();
+                    if (sigStr.includes("SELL") || sigStr.includes("SHORT") || sigStr === "DOWN" || sigStr === "BEARISH") {
+                        suggestedTrend = "SELL";
+                    } else {
+                        suggestedTrend = "BUY";
+                    }
+                } else if (!isNaN(foundPrediction)) {
+                    suggestedTrend = predictedTargetPrice >= currentMarketPrice ? "BUY" : "SELL";
+                }
+
+                // Set strict TP and SL matching suggestion direction
+                if (!isNaN(parsedTp) && parsedTp > 0) {
+                    customTp = parsedTp;
+                } else {
+                    customTp = suggestedTrend === "BUY" ? currentMarketPrice + 0.0100 : currentMarketPrice - 0.0100;
+                }
+
+                if (!isNaN(parsedSl) && parsedSl > 0) {
+                    customSl = parsedSl;
+                } else {
+                    customSl = suggestedTrend === "BUY" ? currentMarketPrice - 0.0050 : currentMarketPrice + 0.0050;
+                }
                 
-                document.getElementById("market-source-info").innerText = "Synced with prediction model successfully";
-                document.getElementById("suggestion-badge").innerText = `${suggestedTrend} Target: ${predictedTargetPrice.toFixed(4)}`;
+                document.getElementById("market-source-info").innerText = "Synced with forex-swingtrading successfully";
+                document.getElementById("suggestion-badge").innerText = `${suggestedTrend} Target: ${customTp.toFixed(4)}`;
                 document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
 
                 applyDashboardSuggestion();
 
             } catch (error) {
                 console.warn("JSON fetch error:", error);
-                document.getElementById("market-source-info").innerText = "Using default market price (data.json offline)";
+                document.getElementById("market-source-info").innerText = "Using default market values (offline fallback)";
                 document.getElementById("suggestion-badge").innerText = "BUY Target: 1.1600";
                 document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
             }
@@ -185,14 +217,8 @@
         function applyDashboardSuggestion() {
             document.getElementById("trade-type").value = suggestedTrend;
             document.getElementById("entry-price").value = currentMarketPrice.toFixed(4);
-            
-            if (suggestedTrend === "BUY") {
-                document.getElementById("tp-price").value = (currentMarketPrice + 0.0100).toFixed(4);
-                document.getElementById("sl-price").value = (currentMarketPrice - 0.0050).toFixed(4);
-            } else {
-                document.getElementById("tp-price").value = (currentMarketPrice - 0.0100).toFixed(4);
-                document.getElementById("sl-price").value = (currentMarketPrice + 0.0050).toFixed(4);
-            }
+            document.getElementById("tp-price").value = customTp.toFixed(4);
+            document.getElementById("sl-price").value = customSl.toFixed(4);
         }
 
         async function fetchTradesFromSheets() {
