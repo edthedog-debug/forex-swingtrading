@@ -211,13 +211,29 @@
                 
                 let rawData = await response.json();
                 
-                trades = rawData.map(t => ({
-                    ...t,
-                    entry: Number(t.entry) || 0,
-                    tp: Number(t.tp) || 0,
-                    sl: Number(t.sl) || 0,
-                    profit: Number(t.profit) || 0
-                })).filter(t => t.entry > 0);
+                // Mapeo robusto adaptado al estado actual de las columnas (id, type, entry, tp, sl, exit, profit, status)
+                trades = rawData.map((t, index) => {
+                    let tradeId = t.id || (t.type && !t.id ? Date.now() + index : null) || index + 1;
+                    let tradeType = String(t.type || "").toUpperCase();
+                    let entryVal = Number(t.entry) || 0;
+
+                    // Si por el desplazamiento de columnas el "type" vino a parar a la propiedad "id" o similar
+                    if ((tradeType !== "BUY" && tradeType !== "SELL") && t.id && (String(t.id).toUpperCase() === "BUY" || String(t.id).toUpperCase() === "SELL")) {
+                        tradeType = String(t.id).toUpperCase();
+                        entryVal = Number(t.type) || 0;
+                    }
+
+                    return {
+                        id: tradeId,
+                        type: (tradeType === "BUY" || tradeType === "SELL") ? tradeType : "SELL",
+                        entry: entryVal,
+                        tp: Number(t.tp) || 0,
+                        sl: Number(t.sl) || 0,
+                        exit: Number(t.exit) || 0,
+                        profit: Number(t.profit) || 0,
+                        status: String(t.status || "OPEN").toUpperCase()
+                    };
+                }).filter(t => t.entry > 0);
 
                 await evaluateAutoTriggers();
                 renderTrades();
@@ -349,7 +365,7 @@
             trades.forEach(t => {
                 const isOpen = t.status === "OPEN";
                 let currentProfit = t.profit;
-                let displayExit = t.exit;
+                let displayExit = t.exit > 0 ? t.exit.toFixed(4) : '-';
 
                 if (isOpen) {
                     currentProfit = t.type === "BUY" ? (currentMarketPrice - t.entry) * UNITS_DEFAULT : (t.entry - currentMarketPrice) * UNITS_DEFAULT;
@@ -361,7 +377,7 @@
                 row.className = "hover:bg-slate-700/30 transition";
                 row.innerHTML = `
                     <td class="p-3">
-                        <span class="px-2 py-1 rounded text-xs font-bold ${isOpen ? 'bg-blue-900/50 text-blue-400 border border-blue-700' : 'bg-slate-800 text-slate-400'}">${t.status || 'CLOSED'}</span>
+                        <span class="px-2 py-1 rounded text-xs font-bold ${isOpen ? 'bg-blue-900/50 text-blue-400 border border-blue-700' : 'bg-slate-800 text-slate-400'}">${t.status}</span>
                     </td>
                     <td class="p-3 font-semibold ${t.type === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}">${t.type}</td>
                     <td class="p-3 font-mono text-slate-300">${t.entry.toFixed(4)}</td>
