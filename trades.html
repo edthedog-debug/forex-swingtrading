@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud Trade Journal - JSON Market Sync</title>
+    <title>Cloud Trade Journal - Robust Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans p-4">
@@ -13,7 +13,7 @@
         <header class="flex justify-between items-center border-b border-slate-800 pb-4">
             <div>
                 <h1 class="text-2xl font-bold tracking-tight text-emerald-400">Cloud Trade Journal</h1>
-                <p class="text-sm text-slate-400">Synced with Google Sheets & auto-driven by data.json market prices.</p>
+                <p class="text-sm text-slate-400">Robust JSON market sync & Google Sheets database.</p>
             </div>
             <a href="index.html" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded font-medium text-slate-300">Back to Dashboard</a>
         </header>
@@ -42,11 +42,11 @@
         <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
                 <h2 class="text-sm font-semibold text-slate-200">Live Market Price (from data.json)</h2>
-                <p id="market-source-info" class="text-xs text-slate-400">Fetching latest market price from repository...</p>
+                <p id="market-source-info" class="text-xs text-slate-400">Reading latest market price...</p>
             </div>
             <div class="flex items-center gap-3">
-                <span id="live-market-display" class="bg-slate-900 border border-slate-700 rounded px-4 py-2 text-sm text-emerald-400 font-mono font-bold">---</span>
-                <button onclick="loadAllData()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded text-xs transition">Refresh Market & Trades</button>
+                <span id="live-market-display" class="bg-slate-900 border border-slate-700 rounded px-4 py-2 text-sm text-emerald-400 font-mono font-bold">1.1500</span>
+                <button onclick="loadAllData()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded text-xs transition">Refresh</button>
             </div>
         </div>
 
@@ -112,9 +112,9 @@
     </div>
 
     <script>
-        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEXd4jsBe2dtW4qDl5-1sIo5WgpP1O7Fea_SPkHp92c99tNjov88E-UqH34LlFxjq9/exec"; 
+        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbysaB6nB8qm7If0SKpJu3EKzQfYZRY36HHu9NxMS-OTkWwQX-OyBSW4Pl5GstD9VVFl/exec"; 
         let trades = [];
-        let currentMarketPrice = 0;
+        let currentMarketPrice = 1.1500;
         const UNITS_DEFAULT = 10000;
 
         async function loadAllData() {
@@ -124,28 +124,35 @@
 
         async function fetchMarketPriceFromJson() {
             try {
-                // Intenta leer data.json del mismo repositorio
-                const response = await fetch("data.json");
-                if (!response.ok) throw new Error("Could not load data.json");
+                const response = await fetch("data.json?t=" + Date.now());
+                if (!response.ok) throw new Error("File not found");
                 const jsonData = await response.json();
                 
-                // Extrae el último precio disponible según el formato de tu json (admite array u objetos con price/close)
+                let foundPrice = null;
+
                 if (Array.isArray(jsonData) && jsonData.length > 0) {
-                    const lastItem = jsonData[jsonData.length - 1];
-                    currentMarketPrice = Number(lastItem.price || lastItem.close || lastItem.value || Object.values(lastItem).pop());
-                } else if (typeof jsonData === 'object') {
-                    // Si es un objeto complejo, busca alguna propiedad de precio o el último elemento
-                    const keys = Object.keys(jsonData);
-                    currentMarketPrice = Number(jsonData[keys[keys.length - 1]] || 1.1500);
+                    const last = jsonData[jsonData.length - 1];
+                    if (typeof last === 'object' && last !== null) {
+                        foundPrice = Number(last.price || last.close || last.value || last.c || Object.values(last).find(v => typeof v === 'number'));
+                    } else if (typeof last === 'number') {
+                        foundPrice = last;
+                    }
+                } else if (typeof jsonData === 'object' && jsonData !== null) {
+                    foundPrice = Number(jsonData.price || jsonData.close || jsonData.value);
+                }
+
+                if (!isNaN(foundPrice) && foundPrice > 0) {
+                    currentMarketPrice = foundPrice;
+                    document.getElementById("market-source-info").innerText = "Loaded successfully from data.json";
+                } else {
+                    document.getElementById("market-source-info").innerText = "Using default price (format check needed)";
                 }
 
                 document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
-                document.getElementById("market-source-info").innerText = "Successfully updated from data.json";
             } catch (error) {
-                console.warn("Using fallback market price due to json load error:", error);
-                currentMarketPrice = 1.1500; // Precio por defecto si falla la lectura local
-                document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4) + " (Fallback)";
-                document.getElementById("market-source-info").innerText = "data.json not found or unreadable, using default.";
+                console.warn("JSON fetch error:", error);
+                document.getElementById("market-source-info").innerText = "Using default price (data.json offline)";
+                document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
             }
         }
 
@@ -153,13 +160,11 @@
             try {
                 const response = await fetch(SHEETS_WEB_APP_URL);
                 trades = await response.json();
-                
-                // Una vez cargados los trades y el precio de mercado, evaluamos disparadores TP/SL automáticos
                 await evaluateAutoTriggers();
                 renderTrades();
             } catch (error) {
-                console.error("Error fetching trades:", error);
-                document.getElementById("trades-table-body").innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-400 text-xs">Error connecting to Google Sheets database.</td></tr>`;
+                console.error("Sheets fetch error:", error);
+                document.getElementById("trades-table-body").innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-400 text-xs">Error connecting to Google Sheets. Verify Web App deployment access is set to 'Anyone'.</td></tr>`;
             }
         }
 
@@ -167,7 +172,7 @@
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const btn = document.getElementById("submit-btn");
-            btn.innerText = "Opening...";
+            btn.innerText = "Saving to Cloud...";
             btn.disabled = true;
 
             const type = document.getElementById("trade-type").value;
@@ -188,16 +193,26 @@
                 status: "OPEN"
             };
 
-            await fetch(SHEETS_WEB_APP_URL, {
-                method: "POST",
-                body: JSON.stringify(newTrade)
-            });
+            try {
+                await fetch(SHEETS_WEB_APP_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    body: JSON.stringify(newTrade)
+                });
+                
+                setTimeout(() => {
+                    form.reset();
+                    document.getElementById("trade-units").value = UNITS_DEFAULT;
+                    btn.innerText = "Open Trade";
+                    btn.disabled = false;
+                    loadAllData();
+                }, 1000);
 
-            form.reset();
-            document.getElementById("trade-units").value = UNITS_DEFAULT;
-            btn.innerText = "Open Trade";
-            btn.disabled = false;
-            loadAllData();
+            } catch (err) {
+                alert("Error saving trade: " + err);
+                btn.innerText = "Open Trade";
+                btn.disabled = false;
+            }
         });
 
         window.closeTradeManual = async function(id) {
@@ -209,15 +224,21 @@
         }
 
         async function sendCloseRequest(id, exitPrice, profit) {
-            await fetch(SHEETS_WEB_APP_URL, {
-                method: "POST",
-                body: JSON.stringify({
-                    action: "close",
-                    id: id,
-                    exit: exitPrice,
-                    profit: parseFloat(profit.toFixed(2))
-                })
-            });
+            try {
+                await fetch(SHEETS_WEB_APP_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    body: JSON.stringify({
+                        action: "close",
+                        id: id,
+                        exit: exitPrice,
+                        profit: parseFloat(profit.toFixed(2))
+                    })
+                });
+                setTimeout(loadAllData, 1000);
+            } catch (err) {
+                console.error("Close error:", err);
+            }
         }
 
         async function evaluateAutoTriggers() {
@@ -228,12 +249,10 @@
                     let shouldClose = false;
                     let closePrice = currentMarketPrice;
 
-                    // Check Take Profit (TP)
                     if (t.tp > 0) {
                         if (t.type === "BUY" && currentMarketPrice >= t.tp) { shouldClose = true; closePrice = t.tp; }
                         if (t.type === "SELL" && currentMarketPrice <= t.tp) { shouldClose = true; closePrice = t.tp; }
                     }
-                    // Check Stop Loss (SL)
                     if (t.sl > 0 && !shouldClose) {
                         if (t.type === "BUY" && currentMarketPrice <= t.sl) { shouldClose = true; closePrice = t.sl; }
                         if (t.type === "SELL" && currentMarketPrice >= t.sl) { shouldClose = true; closePrice = t.sl; }
@@ -246,20 +265,16 @@
                     }
                 }
             }
-
-            if (stateChanged) {
-                const response = await fetch(SHEETS_WEB_APP_URL);
-                trades = await response.json();
-            }
         }
 
         window.clearTrades = async function() {
-            if(confirm("Are you sure you want to clear all records from the Google Sheet?")) {
+            if(confirm("Clear all records from Google Sheets?")) {
                 await fetch(SHEETS_WEB_APP_URL, {
                     method: "POST",
+                    mode: "no-cors",
                     body: JSON.stringify({ action: "clear" })
                 });
-                loadAllData();
+                setTimeout(loadAllData, 1000);
             }
         }
 
@@ -268,7 +283,7 @@
             tableBody.innerHTML = "";
             
             if (trades.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-500 text-xs">No trades found in Google Sheets. Open your first position above.</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-500 text-xs">No trades found in Google Sheets.</td></tr>`;
                 updateMetrics([]);
                 return;
             }
@@ -334,7 +349,6 @@
             profitElem.className = `text-2xl font-bold mt-1 ${totalNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
         }
 
-        // Initial load on page start
         loadAllData();
     </script>
 </body>
