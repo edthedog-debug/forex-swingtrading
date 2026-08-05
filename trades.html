@@ -122,7 +122,6 @@
     </div>
 
     <script>
-        // Updated Google Sheets Web App URL
         const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwH0TpLEIuyVea-wez4Nir9A5_kEQEBP1ZYhWkbiU-cpDTKoSTdAfXwvHQ3yLHdTR2k/exec"; 
         let trades = [];
         let currentMarketPrice = 1.1500;
@@ -144,7 +143,6 @@
                 
                 let targetObj = null;
 
-                // Inspect data.json structure to match the exact signal object format from index.html
                 if (jsonData) {
                     if (Array.isArray(jsonData.signals) && jsonData.signals.length > 0) {
                         targetObj = jsonData.signals[jsonData.signals.length - 1];
@@ -160,7 +158,6 @@
                 }
 
                 if (targetObj) {
-                    // Extract price, stop loss, take profit and signal/action explicitly
                     let p = Number(targetObj.price || targetObj.currentPrice || targetObj.close || targetObj.value);
                     if (!isNaN(p) && p > 0) currentMarketPrice = p;
 
@@ -212,7 +209,16 @@
                 
                 if (!response.ok) throw new Error("Network response was not ok");
                 
-                trades = await response.json();
+                let rawData = await response.json();
+                
+                trades = rawData.map(t => ({
+                    ...t,
+                    entry: Number(t.entry) || 0,
+                    tp: Number(t.tp) || 0,
+                    sl: Number(t.sl) || 0,
+                    profit: Number(t.profit) || 0
+                })).filter(t => t.entry > 0);
+
                 await evaluateAutoTriggers();
                 renderTrades();
             } catch (error) {
@@ -358,8 +364,8 @@
                         <span class="px-2 py-1 rounded text-xs font-bold ${isOpen ? 'bg-blue-900/50 text-blue-400 border border-blue-700' : 'bg-slate-800 text-slate-400'}">${t.status || 'CLOSED'}</span>
                     </td>
                     <td class="p-3 font-semibold ${t.type === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}">${t.type}</td>
-                    <td class="p-3 font-mono text-slate-300">${t.entry}</td>
-                    <td class="p-3 font-mono text-xs text-slate-400">TP: ${t.tp || '-'}<br>SL: ${t.sl || '-'}</td>
+                    <td class="p-3 font-mono text-slate-300">${t.entry.toFixed(4)}</td>
+                    <td class="p-3 font-mono text-xs text-slate-400">TP: ${t.tp ? t.tp.toFixed(4) : '-'}<br>SL: ${t.sl ? t.sl.toFixed(4) : '-'}</td>
                     <td class="p-3 font-mono text-slate-300">${displayExit}</td>
                     <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${currentProfit >= 0 ? '+' : ''}€${parseFloat(currentProfit).toFixed(2)}</td>
                     <td class="p-3 text-right">
