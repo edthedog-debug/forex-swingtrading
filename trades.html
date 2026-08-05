@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+html_content = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -149,7 +149,10 @@
                 let parsedTp = null;
                 let parsedSl = null;
 
-                if (Array.isArray(jsonData) && jsonData.length > 0) {
+                // Also check if prices array exists in jsonData to extract the absolute latest price close
+                if (jsonData && Array.isArray(jsonData.prices) && jsonData.prices.length > 0) {
+                    foundPrice = Number(jsonData.prices[jsonData.prices.length - 1]);
+                } else if (Array.isArray(jsonData) && jsonData.length > 0) {
                     const last = jsonData[jsonData.length - 1];
                     if (typeof last === 'object' && last !== null) {
                         foundPrice = Number(last.price || last.close || last.value || last.c || Object.values(last).find(v => typeof v === 'number'));
@@ -161,7 +164,7 @@
                         foundPrice = last;
                     }
                 } else if (typeof jsonData === 'object' && jsonData !== null) {
-                    foundPrice = Number(jsonData.price || jsonData.close || jsonData.value);
+                    foundPrice = Number(jsonData.currentPrice || jsonData.price || jsonData.close || jsonData.value);
                     foundPrediction = Number(jsonData.prediction || jsonData.target);
                     explicitSignal = jsonData.signal || jsonData.trend || jsonData.direction || jsonData.action;
                     parsedTp = Number(jsonData.tp || jsonData.takeProfit);
@@ -428,3 +431,9 @@
 <script data-goatcounter="https://forex.goatcounter.com/count"
         async src="//gc.zgo.at/count.js"></script>
 </html>
+"""
+
+with open("trades.html", "w", encoding="utf-8") as f:
+    f.write(html_content)
+
+print("trades.html updated successfully.")
