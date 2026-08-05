@@ -136,12 +136,8 @@
         const UNITS_DEFAULT = 10000;
 
         async function loadAllData() {
-            try {
-                await fetchMarketPriceFromJson();
-                await fetchTradesFromSheets();
-            } catch (error) {
-                console.error("Error in loadAllData:", error);
-            }
+            await fetchMarketPriceFromJson();
+            await fetchTradesFromSheets();
         }
 
         async function fetchMarketPriceFromJson() {
@@ -151,7 +147,6 @@
                 const jsonData = await response.json();
                 
                 let targetObj = null;
-
                 if (jsonData) {
                     if (Array.isArray(jsonData.signals) && jsonData.signals.length > 0) {
                         targetObj = jsonData.signals[jsonData.signals.length - 1];
@@ -190,13 +185,10 @@
                 badge.className = `text-xs font-bold ${suggestedTrend === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}`;
                 document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
 
+                applyDashboardSuggestion();
             } catch (error) {
                 console.warn("JSON fetch error:", error);
                 document.getElementById("market-source-info").innerText = "Using default market values (offline fallback)";
-                const badge = document.getElementById("suggestion-badge");
-                badge.innerText = `${suggestedTrend} Target: ${customTp.toFixed(4)}`;
-                badge.className = `text-xs font-bold ${suggestedTrend === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}`;
-                document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
             }
         }
 
@@ -209,27 +201,21 @@
 
         async function fetchTradesFromSheets() {
             try {
-                const response = await fetch(SHEETS_WEB_APP_URL + "?action=getAll", { 
+                const response = await fetch(SHEETS_WEB_APP_URL + "?t=" + Date.now(), { 
                     method: 'GET',
                     redirect: 'follow'
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
                 const textData = await response.text();
-                console.log("Raw response from Sheets:", textData);
-                
                 let resJson;
                 try {
                     resJson = JSON.parse(textData);
                 } catch (e) {
-                    console.error("Failed to parse JSON:", textData);
+                    console.error("Respuesta no válida JSON:", textData);
                     throw new Error("Invalid JSON response from Google Apps Script");
                 }
 
-                console.log("Parsed Google Sheets Data:", resJson);
+                console.log("Datos recibidos de Google Sheets:", resJson);
 
                 let rawData = [];
                 if (Array.isArray(resJson)) {
@@ -238,82 +224,55 @@
                     rawData = resJson.data;
                 } else if (resJson && Array.isArray(resJson.trades)) {
                     rawData = resJson.trades;
-                } else if (resJson && resJson.rows && Array.isArray(resJson.rows)) {
-                    rawData = resJson.rows;
                 } else if (resJson && typeof resJson === 'object') {
-                    // Try to get array from object values
-                    const values = Object.values(resJson);
-                    if (values.length > 0 && Array.isArray(values[0])) {
-                        rawData = values;
-                    } else if (values.some(v => Array.isArray(v))) {
-                        rawData = values.find(v => Array.isArray(v)) || [];
-                    }
+                    rawData = Object.values(resJson);
                 }
 
-                trades = rawData
-                    .filter(row => {
-                        // Filter out empty rows and header rows
-                        if (!row || (Array.isArray(row) && row.length === 0)) return false;
-                        if (Array.isArray(row) && row.length > 0) {
-                            // Check if first element looks like a header
-                            const firstCell = String(row[0] || "").toLowerCase();
-                            return !["id", "trade id", "tradeid"].includes(firstCell);
-                        }
-                        return true;
-                    })
-                    .map((t, index) => {
-                        // Handle array format [id, type, entry, tp, sl, exit, profit, status]
-                        if (Array.isArray(t)) {
-                            return {
-                                id: String(t[0] || `trade_${Date.now()}_${index}`),
-                                type: String(t[1] || "SELL").toUpperCase().includes("BUY") ? "BUY" : "SELL",
-                                entry: parseFloat(t[2]) || 0,
-                                tp: parseFloat(t[3]) || 0,
-                                sl: parseFloat(t[4]) || 0,
-                                exit: parseFloat(t[5]) || 0,
-                                profit: parseFloat(t[6]) || 0,
-                                status: String(t[7] || "OPEN").toUpperCase().includes("CLOSE") ? "CLOSED" : "OPEN"
-                            };
-                        }
+                trades = rawData.map((t, index) => {
+                    if (Array.isArray(t)) {
+                        return {
+                            id: String(t[0] || Date.now() + index),
+                            type: String(t[1] || "SELL").toUpperCase().includes("BUY") ? "BUY" : "SELL",
+                            entry: Number(t[2]) || 0,
+                            tp: Number(t[3]) || 0,
+                            sl: Number(t[4]) || 0,
+                            exit: Number(t[5]) || 0,
+                            profit: Number(t[6]) || 0,
+                            status: String(t[7] || "OPEN").toUpperCase().includes("CLOSE") ? "CLOSED" : "OPEN"
+                        };
+                    }
 
-                        // Handle object format
-                        if (typeof t === 'object' && t !== null) {
-                            let tId = String(t.id || t.ID || t.tradeId || t.trade_id || `trade_${Date.now()}_${index}`);
-                            let tType = String(t.type || t.Type || t.action || t.trade_type || "SELL").toUpperCase();
-                            let tEntry = parseFloat(t.entry || t.Entry || t.entry_price || t.price || 0);
-                            let tTp = parseFloat(t.tp || t.TP || t.takeProfit || t.take_profit || 0);
-                            let tSl = parseFloat(t.sl || t.SL || t.stopLoss || t.stop_loss || 0);
-                            let tExit = parseFloat(t.exit || t.Exit || t.exit_price || 0);
-                            let tProfit = parseFloat(t.profit || t.Profit || t.pnl || 0);
-                            let tStatus = String(t.status || t.Status || t.trade_status || "OPEN").toUpperCase();
+                    let tId = String(t.id || t.ID || t.tradeId || t[0] || (Date.now() + index));
+                    let tType = String(t.type || t.Type || t.action || t[1] || "SELL").toUpperCase();
+                    let tEntry = Number(t.entry || t.Entry || t.price || t[2]) || 0;
+                    let tTp = Number(t.tp || t.TP || t.takeProfit || t[3]) || 0;
+                    let tSl = Number(t.sl || t.SL || t.stopLoss || t[4]) || 0;
+                    let tExit = Number(t.exit || t.Exit || t[5]) || 0;
+                    let tProfit = Number(t.profit || t.Profit || t[6]) || 0;
+                    let tStatus = String(t.status || t.Status || t[7] || "OPEN").toUpperCase();
 
-                            return {
-                                id: tId,
-                                type: tType.includes("BUY") ? "BUY" : "SELL",
-                                entry: tEntry,
-                                tp: tTp,
-                                sl: tSl,
-                                exit: tExit,
-                                profit: tProfit,
-                                status: tStatus.includes("CLOSE") ? "CLOSED" : "OPEN"
-                            };
-                        }
+                    return {
+                        id: tId,
+                        type: tType.includes("BUY") ? "BUY" : "SELL",
+                        entry: tEntry,
+                        tp: tTp,
+                        sl: tSl,
+                        exit: tExit,
+                        profit: tProfit,
+                        status: tStatus.includes("CLOSE") ? "CLOSED" : "OPEN"
+                    };
+                }).filter(t => t.entry > 0 && !isNaN(t.entry) && t.id !== "id" && t.id !== "ID");
 
-                        return null;
-                    })
-                    .filter(t => t !== null && t.entry > 0 && !isNaN(t.entry)); // Remove invalid entries
-
-                console.log("Processed trades array:", trades);
+                console.log("Trades procesados y filtrados:", trades);
 
                 await evaluateAutoTriggers();
                 renderTrades();
-                updateMetrics(trades);
             } catch (error) {
                 console.error("Sheets fetch error:", error);
                 document.getElementById("trades-table-body").innerHTML = `
                     <tr><td colspan="7" class="p-4 text-center text-amber-400 text-xs">
-                        Error loading cloud trades: ${error.message}<br>
-                        <button onclick="loadAllData()" class="underline ml-2 font-bold mt-2">Retry</button>
+                        Error loading cloud trades. 
+                        <button onclick="loadAllData()" class="underline ml-2 font-bold">Retry</button>
                     </td></tr>`;
                 trades = [];
                 updateMetrics([]);
@@ -324,7 +283,6 @@
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const btn = document.getElementById("submit-btn");
-            const originalText = btn.innerText;
             btn.innerText = "Saving to Cloud...";
             btn.disabled = true;
 
@@ -332,60 +290,42 @@
             const entry = parseFloat(document.getElementById("entry-price").value);
             const tp = document.getElementById("tp-price").value ? parseFloat(document.getElementById("tp-price").value) : 0;
             const sl = document.getElementById("sl-price").value ? parseFloat(document.getElementById("sl-price").value) : 0;
-            const units = parseFloat(document.getElementById("trade-units").value) || UNITS_DEFAULT;
 
             const params = new URLSearchParams({
                 action: "add",
                 id: String(Date.now()),
                 type: type,
-                entry: entry.toFixed(4),
-                tp: tp.toFixed(4),
-                sl: sl.toFixed(4),
-                units: units
+                entry: entry,
+                tp: tp,
+                sl: sl
             });
 
             try {
-                const response = await fetch(`${SHEETS_WEB_APP_URL}?${params.toString()}`, {
+                await fetch(`${SHEETS_WEB_APP_URL}?${params.toString()}`, {
                     method: "GET",
                     redirect: "follow"
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const result = await response.text();
-                console.log("Add trade response:", result);
-                
-                // Reset form
-                form.reset();
-                document.getElementById("trade-units").value = UNITS_DEFAULT;
-                
-                // Reload data after short delay
                 setTimeout(() => {
+                    form.reset();
+                    document.getElementById("trade-units").value = UNITS_DEFAULT;
+                    btn.innerText = "Open Trade";
+                    btn.disabled = false;
                     loadAllData();
-                }, 1500);
+                }, 1200);
 
             } catch (err) {
-                console.error("Error saving trade:", err);
-                alert("Error saving trade: " + err.message);
-            } finally {
-                btn.innerText = originalText;
+                alert("Error saving trade: " + err);
+                btn.innerText = "Open Trade";
                 btn.disabled = false;
             }
         });
 
         window.closeTradeManual = async function(id) {
             const trade = trades.find(t => String(t.id) === String(id));
-            if (!trade) {
-                console.error("Trade not found:", id);
-                return;
-            }
+            if (!trade) return;
 
-            let profit = trade.type === "BUY" 
-                ? (currentMarketPrice - trade.entry) * UNITS_DEFAULT 
-                : (trade.entry - currentMarketPrice) * UNITS_DEFAULT;
-            
+            let profit = trade.type === "BUY" ? (currentMarketPrice - trade.entry) * UNITS_DEFAULT : (trade.entry - currentMarketPrice) * UNITS_DEFAULT;
             await sendCloseRequest(id, currentMarketPrice, profit);
         }
 
@@ -393,119 +333,57 @@
             const params = new URLSearchParams({
                 action: "close",
                 id: String(id),
-                exit: exitPrice.toFixed(4),
-                profit: profit.toFixed(2)
+                exit: exitPrice,
+                profit: parseFloat(profit.toFixed(2))
             });
 
             try {
-                const response = await fetch(`${SHEETS_WEB_APP_URL}?${params.toString()}`, {
+                await fetch(`${SHEETS_WEB_APP_URL}?${params.toString()}`, {
                     method: "GET",
                     redirect: "follow"
                 });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const result = await response.text();
-                console.log("Close trade response:", result);
-                
-                // Reload data after closing
-                setTimeout(() => {
-                    loadAllData();
-                }, 1500);
+                setTimeout(loadAllData, 1200);
             } catch (err) {
                 console.error("Close error:", err);
-                alert("Error closing trade: " + err.message);
             }
         }
 
         async function evaluateAutoTriggers() {
-            let hasAutoClosed = false;
-            
             for (let t of trades) {
                 if (t.status === "OPEN") {
                     let shouldClose = false;
                     let closePrice = currentMarketPrice;
 
-                    // Check Take Profit
                     if (t.tp > 0) {
-                        if (t.type === "BUY" && currentMarketPrice >= t.tp) { 
-                            shouldClose = true; 
-                            closePrice = t.tp; 
-                        }
-                        if (t.type === "SELL" && currentMarketPrice <= t.tp) { 
-                            shouldClose = true; 
-                            closePrice = t.tp; 
-                        }
+                        if (t.type === "BUY" && currentMarketPrice >= t.tp) { shouldClose = true; closePrice = t.tp; }
+                        if (t.type === "SELL" && currentMarketPrice <= t.tp) { shouldClose = true; closePrice = t.tp; }
                     }
-                    
-                    // Check Stop Loss (only if TP hasn't triggered)
                     if (t.sl > 0 && !shouldClose) {
-                        if (t.type === "BUY" && currentMarketPrice <= t.sl) { 
-                            shouldClose = true; 
-                            closePrice = t.sl; 
-                        }
-                        if (t.type === "SELL" && currentMarketPrice >= t.sl) { 
-                            shouldClose = true; 
-                            closePrice = t.sl; 
-                        }
+                        if (t.type === "BUY" && currentMarketPrice <= t.sl) { shouldClose = true; closePrice = t.sl; }
+                        if (t.type === "SELL" && currentMarketPrice >= t.sl) { shouldClose = true; closePrice = t.sl; }
                     }
 
                     if (shouldClose) {
-                        let profit = t.type === "BUY" 
-                            ? (closePrice - t.entry) * UNITS_DEFAULT 
-                            : (t.entry - closePrice) * UNITS_DEFAULT;
-                        
-                        console.log(`Auto-closing trade ${t.id}: ${t.type} at ${closePrice}, P&L: ${profit.toFixed(2)}`);
+                        let profit = t.type === "BUY" ? (closePrice - t.entry) * UNITS_DEFAULT : (t.entry - closePrice) * UNITS_DEFAULT;
                         await sendCloseRequest(t.id, closePrice, profit);
-                        hasAutoClosed = true;
                     }
                 }
-            }
-            
-            // If any trades were auto-closed, reload data
-            if (hasAutoClosed) {
-                await fetchTradesFromSheets();
             }
         }
 
         window.clearTrades = async function() {
-            if(confirm("Clear all records from Google Sheets? This cannot be undone!")) {
+            if(confirm("Clear all records from Google Sheets?")) {
                 const params = new URLSearchParams({ action: "clear" });
-                
-                try {
-                    const response = await fetch(`${SHEETS_WEB_APP_URL}?${params.toString()}`, {
-                        method: "GET",
-                        redirect: "follow"
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    
-                    const result = await response.text();
-                    console.log("Clear trades response:", result);
-                    
-                    // Reload data after clearing
-                    setTimeout(() => {
-                        loadAllData();
-                    }, 1500);
-                } catch (err) {
-                    console.error("Clear error:", err);
-                    alert("Error clearing trades: " + err.message);
-                }
+                await fetch(`${SHEETS_WEB_APP_URL}?${params.toString()}`, {
+                    method: "GET",
+                    redirect: "follow"
+                });
+                setTimeout(loadAllData, 1200);
             }
         }
 
         function renderTrades() {
             const tableBody = document.getElementById("trades-table-body");
-            
-            if (!tableBody) {
-                console.error("Table body element not found");
-                return;
-            }
-            
             tableBody.innerHTML = "";
             
             if (trades.length === 0) {
@@ -514,22 +392,13 @@
                 return;
             }
 
-            // Sort trades by ID (newest first)
-            const sortedTrades = [...trades].sort((a, b) => {
-                const idA = parseInt(a.id) || 0;
-                const idB = parseInt(b.id) || 0;
-                return idB - idA;
-            });
-
-            sortedTrades.forEach(t => {
+            trades.forEach(t => {
                 const isOpen = t.status === "OPEN";
                 let currentProfit = t.profit;
                 let displayExit = t.exit > 0 ? t.exit.toFixed(4) : '-';
 
                 if (isOpen) {
-                    currentProfit = t.type === "BUY" 
-                        ? (currentMarketPrice - t.entry) * UNITS_DEFAULT 
-                        : (t.entry - currentMarketPrice) * UNITS_DEFAULT;
+                    currentProfit = t.type === "BUY" ? (currentMarketPrice - t.entry) * UNITS_DEFAULT : (t.entry - currentMarketPrice) * UNITS_DEFAULT;
                     displayExit = `<span class="text-blue-400">${currentMarketPrice.toFixed(4)} (Live)</span>`;
                 }
 
@@ -574,9 +443,7 @@
 
             const closedNet = closedTrades.reduce((acc, t) => acc + Number(t.profit), 0);
             const openFloating = openTrades.reduce((acc, t) => {
-                let p = t.type === "BUY" 
-                    ? (currentMarketPrice - t.entry) * UNITS_DEFAULT 
-                    : (t.entry - currentMarketPrice) * UNITS_DEFAULT;
+                let p = t.type === "BUY" ? (currentMarketPrice - t.entry) * UNITS_DEFAULT : (t.entry - currentMarketPrice) * UNITS_DEFAULT;
                 return acc + p;
             }, 0);
 
@@ -586,17 +453,7 @@
             profitElem.className = `text-2xl font-bold mt-1 ${totalNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
         }
 
-        // Initialize on page load
-        window.addEventListener('DOMContentLoaded', () => {
-            console.log("Initializing Cloud Trade Journal...");
-            loadAllData();
-            
-            // Auto-refresh every 30 seconds
-            setInterval(() => {
-                console.log("Auto-refreshing data...");
-                loadAllData();
-            }, 30000);
-        });
+        loadAllData();
     </script>
 </body>
 <script data-goatcounter="https://forex.goatcounter.com/count"
