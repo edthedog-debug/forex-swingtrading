@@ -207,22 +207,21 @@
 
         async function fetchTradesFromSheets() {
             try {
-                // Forzamos la petición usando JSONP alternativo o texto plano para evitar bloqueos de redirección estricta de Google
                 const response = await fetch(SHEETS_WEB_APP_URL + "?t=" + Date.now(), { 
                     method: 'GET',
                     redirect: 'follow'
                 });
                 
-                let textData = await response.text();
+                const textData = await response.text();
                 let resJson;
                 try {
                     resJson = JSON.parse(textData);
                 } catch (e) {
-                    console.error("Not valid JSON:", textData);
-                    throw new Error("Invalid JSON from Apps Script");
+                    console.error("Non-JSON returned:", textData);
+                    throw new Error("Invalid JSON response from Google Apps Script");
                 }
 
-                console.log("Parsed Google Sheets Response:", resJson);
+                console.log("Raw Google Sheets Data:", resJson);
 
                 let rawData = [];
                 if (Array.isArray(resJson)) {
@@ -236,6 +235,7 @@
                 }
 
                 trades = rawData.map((t, index) => {
+                    // Si viene como array plano de celdas por fila [id, type, entry, tp, sl, exit, profit, status]
                     if (Array.isArray(t)) {
                         return {
                             id: String(t[0] || Date.now() + index),
@@ -249,6 +249,7 @@
                         };
                     }
 
+                    // Si viene como objeto con propiedades clave
                     let tId = String(t.id || t.ID || t.tradeId || t[0] || (Date.now() + index));
                     let tType = String(t.type || t.Type || t.action || t[1] || "SELL").toUpperCase();
                     let tEntry = Number(t.entry || t.Entry || t.price || t[2]) || 0;
@@ -268,9 +269,9 @@
                         profit: tProfit,
                         status: tStatus.includes("CLOSE") ? "CLOSED" : "OPEN"
                     };
-                }).filter(t => t.entry > 0 && !isNaN(t.entry));
+                }).filter(t => t.entry > 0 && !isNaN(t.entry)); // Filtra filas vacías de la cabecera o vacías de la hoja
 
-                console.log("Successfully filtered trades:", trades);
+                console.log("Processed trades array:", trades);
 
                 await evaluateAutoTriggers();
                 renderTrades();
@@ -278,7 +279,7 @@
                 console.error("Sheets fetch error:", error);
                 document.getElementById("trades-table-body").innerHTML = `
                     <tr><td colspan="7" class="p-4 text-center text-amber-400 text-xs">
-                        Connection error or empty sheet. 
+                        Error loading cloud trades. 
                         <button onclick="loadAllData()" class="underline ml-2 font-bold">Retry</button>
                     </td></tr>`;
                 trades = [];
