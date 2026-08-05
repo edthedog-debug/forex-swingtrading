@@ -126,10 +126,9 @@
         const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwH0TpLEIuyVea-wez4Nir9A5_kEQEBP1ZYhWkbiU-cpDTKoSTdAfXwvHQ3yLHdTR2k/exec"; 
         let trades = [];
         let currentMarketPrice = 1.1500;
-        let predictedTargetPrice = 1.1600;
-        let suggestedTrend = "BUY";
-        let customTp = 0;
-        let customSl = 0;
+        let suggestedTrend = "SELL";
+        let customTp = 1.1446;
+        let customSl = 1.1604;
         const UNITS_DEFAULT = 10000;
 
         async function loadAllData() {
@@ -143,67 +142,42 @@
                 if (!response.ok) throw new Error("File not found");
                 const jsonData = await response.json();
                 
-                let foundPrice = null;
-                let foundPrediction = null;
-                let explicitSignal = null;
-                let parsedTp = null;
-                let parsedSl = null;
+                let targetObj = null;
 
-                // Extract data precisely mapping object properties from data.json
-                if (jsonData && Array.isArray(jsonData.prices) && jsonData.prices.length > 0) {
-                    foundPrice = Number(jsonData.prices[jsonData.prices.length - 1]);
-                } else if (Array.isArray(jsonData) && jsonData.length > 0) {
-                    const last = jsonData[jsonData.length - 1];
-                    if (typeof last === 'object' && last !== null) {
-                        foundPrice = Number(last.price || last.close || last.value || last.c || Object.values(last).find(v => typeof v === 'number'));
-                        foundPrediction = Number(last.prediction || last.target || last.p || last.forecast);
-                        explicitSignal = last.signal || last.trend || last.direction || last.action;
-                        parsedTp = Number(last.tp || last.takeProfit);
-                        parsedSl = Number(last.sl || last.stopLoss || last.stop_loss);
-                    } else if (typeof last === 'number') {
-                        foundPrice = last;
+                // Inspect data.json structure to match the exact signal object format from index.html
+                if (jsonData) {
+                    if (Array.isArray(jsonData.signals) && jsonData.signals.length > 0) {
+                        targetObj = jsonData.signals[jsonData.signals.length - 1];
+                    } else if (Array.isArray(jsonData) && jsonData.length > 0) {
+                        targetObj = jsonData[jsonData.length - 1];
+                    } else if (typeof jsonData === 'object') {
+                        if (Array.isArray(jsonData.history) && jsonData.history.length > 0) {
+                            targetObj = jsonData.history[jsonData.history.length - 1];
+                        } else {
+                            targetObj = jsonData;
+                        }
                     }
-                } else if (typeof jsonData === 'object' && jsonData !== null) {
-                    foundPrice = Number(jsonData.currentPrice || jsonData.price || jsonData.close || jsonData.value);
-                    foundPrediction = Number(jsonData.prediction || jsonData.target);
-                    explicitSignal = jsonData.signal || jsonData.trend || jsonData.direction || jsonData.action;
-                    parsedTp = Number(jsonData.tp || jsonData.takeProfit);
-                    parsedSl = Number(jsonData.sl || jsonData.stopLoss || jsonData.stop_loss);
                 }
 
-                if (!isNaN(foundPrice) && foundPrice > 0) {
-                    currentMarketPrice = foundPrice;
-                }
+                if (targetObj) {
+                    // Extract price, stop loss, take profit and signal/action explicitly
+                    let p = Number(targetObj.price || targetObj.currentPrice || targetObj.close || targetObj.value);
+                    if (!isNaN(p) && p > 0) currentMarketPrice = p;
 
-                if (!isNaN(foundPrediction) && foundPrediction > 0) {
-                    predictedTargetPrice = foundPrediction;
-                }
+                    let slVal = Number(targetObj.stopLoss || targetObj.stop_loss || targetObj.sl);
+                    if (!isNaN(slVal) && slVal > 0) customSl = slVal;
 
-                // Determine trend accurately matching the dashboard signal logic
-                if (explicitSignal) {
-                    const sigStr = String(explicitSignal).toUpperCase();
-                    if (sigStr.includes("SELL") || sigStr.includes("SHORT") || sigStr === "DOWN" || sigStr === "BEARISH") {
+                    let tpVal = Number(targetObj.takeProfit || targetObj.tp || targetObj.target);
+                    if (!isNaN(tpVal) && tpVal > 0) customTp = tpVal;
+
+                    let actionStr = String(targetObj.action || targetObj.signal || targetObj.trend || "").toUpperCase();
+                    if (actionStr.includes("SELL") || actionStr.includes("SHORT")) {
                         suggestedTrend = "SELL";
-                    } else {
+                    } else if (actionStr.includes("BUY") || actionStr.includes("LONG")) {
                         suggestedTrend = "BUY";
                     }
-                } else if (!isNaN(foundPrediction)) {
-                    suggestedTrend = predictedTargetPrice >= currentMarketPrice ? "BUY" : "SELL";
                 }
 
-                // Strictly map explicit TP and SL from data.json without default formula overrides
-                if (!isNaN(parsedTp) && parsedTp > 0) {
-                    customTp = parsedTp;
-                } else {
-                    customTp = suggestedTrend === "BUY" ? currentMarketPrice + 0.0100 : currentMarketPrice - 0.0100;
-                }
-
-                if (!isNaN(parsedSl) && parsedSl > 0) {
-                    customSl = parsedSl;
-                } else {
-                    customSl = suggestedTrend === "BUY" ? currentMarketPrice - 0.0050 : currentMarketPrice + 0.0050;
-                }
-                
                 document.getElementById("market-source-info").innerText = "Synced with forex-swingtrading successfully";
                 const badge = document.getElementById("suggestion-badge");
                 badge.innerText = `${suggestedTrend} Target: ${customTp.toFixed(4)}`;
@@ -215,7 +189,9 @@
             } catch (error) {
                 console.warn("JSON fetch error:", error);
                 document.getElementById("market-source-info").innerText = "Using default market values (offline fallback)";
-                document.getElementById("suggestion-badge").innerText = "BUY Target: 1.1600";
+                const badge = document.getElementById("suggestion-badge");
+                badge.innerText = `${suggestedTrend} Target: ${customTp.toFixed(4)}`;
+                badge.className = `text-xs font-bold ${suggestedTrend === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}`;
                 document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
             }
         }
