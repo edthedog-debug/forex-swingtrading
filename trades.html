@@ -207,15 +207,22 @@
 
         async function fetchTradesFromSheets() {
             try {
+                // Forzamos la petición usando JSONP alternativo o texto plano para evitar bloqueos de redirección estricta de Google
                 const response = await fetch(SHEETS_WEB_APP_URL + "?t=" + Date.now(), { 
                     method: 'GET',
                     redirect: 'follow'
                 });
                 
-                if (!response.ok) throw new Error("Network response was not ok");
-                
-                let resJson = await response.json();
-                console.log("Raw response from Apps Script:", resJson);
+                let textData = await response.text();
+                let resJson;
+                try {
+                    resJson = JSON.parse(textData);
+                } catch (e) {
+                    console.error("Not valid JSON:", textData);
+                    throw new Error("Invalid JSON from Apps Script");
+                }
+
+                console.log("Parsed Google Sheets Response:", resJson);
 
                 let rawData = [];
                 if (Array.isArray(resJson)) {
@@ -229,7 +236,6 @@
                 }
 
                 trades = rawData.map((t, index) => {
-                    // Si viene como array de celdas por fila [id, type, entry, tp, sl, exit, profit, status]
                     if (Array.isArray(t)) {
                         return {
                             id: String(t[0] || Date.now() + index),
@@ -243,7 +249,6 @@
                         };
                     }
 
-                    // Si viene como objeto con propiedades (manejando variantes de nombres y mayúsculas/minúsculas)
                     let tId = String(t.id || t.ID || t.tradeId || t[0] || (Date.now() + index));
                     let tType = String(t.type || t.Type || t.action || t[1] || "SELL").toUpperCase();
                     let tEntry = Number(t.entry || t.Entry || t.price || t[2]) || 0;
@@ -263,9 +268,9 @@
                         profit: tProfit,
                         status: tStatus.includes("CLOSE") ? "CLOSED" : "OPEN"
                     };
-                }).filter(t => t.entry > 0); // Filtra filas vacías de manera estricta
+                }).filter(t => t.entry > 0 && !isNaN(t.entry));
 
-                console.log("Parsed trades:", trades);
+                console.log("Successfully filtered trades:", trades);
 
                 await evaluateAutoTriggers();
                 renderTrades();
