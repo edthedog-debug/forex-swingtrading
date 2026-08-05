@@ -164,7 +164,7 @@
             return p > 0 ? p.toString() : "-";
         }
 
-        // Added force flag to allow manual Retry button click to bypass locked states
+        // Permite forzar la reconexión al hacer clic en Retry (force = true)
         async function loadAllData(force = false) {
             if (force) isFetching = false;
             if (isFetching) return;
@@ -236,7 +236,7 @@
                 badge.className = `text-xs font-bold ${suggestedTrend === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}`;
                 document.getElementById("live-market-display").innerText = displayMarketPrice;
 
-                // Dynamically update form placeholders in real time
+                // Actualización dinámica de los textos en gris (placeholders)
                 document.getElementById("entry-price").placeholder = displayMarketPrice;
                 document.getElementById("tp-price").placeholder = displayCustomTp;
                 document.getElementById("sl-price").placeholder = displayCustomSl;
