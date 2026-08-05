@@ -122,7 +122,6 @@
     </div>
 
     <script>
-        // Updated Google Sheets Web App URL
         const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwH0TpLEIuyVea-wez4Nir9A5_kEQEBP1ZYhWkbiU-cpDTKoSTdAfXwvHQ3yLHdTR2k/exec"; 
         let trades = [];
         let currentMarketPrice = 1.1500;
@@ -176,7 +175,6 @@
                     predictedTargetPrice = foundPrediction;
                 }
 
-                // Determine trend accurately matching forex-swingtrading direction logic
                 if (explicitSignal) {
                     const sigStr = String(explicitSignal).toUpperCase();
                     if (sigStr.includes("SELL") || sigStr.includes("SHORT") || sigStr === "DOWN" || sigStr === "BEARISH") {
@@ -188,7 +186,6 @@
                     suggestedTrend = predictedTargetPrice >= currentMarketPrice ? "BUY" : "SELL";
                 }
 
-                // Set strict corrected TP and SL matching suggestion direction (SELL or BUY)
                 if (!isNaN(parsedTp) && parsedTp > 0) {
                     customTp = parsedTp;
                 } else {
@@ -384,7 +381,7 @@
                     <td class="p-3 font-mono text-slate-300">${displayExit}</td>
                     <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${currentProfit >= 0 ? '+' : ''}€${parseFloat(currentProfit).toFixed(2)}</td>
                     <td class="p-3 text-right">
-                        ${isOpen ? `<button onclick="closeTradeManual(${t.id})" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded">Close</button>` : `<span class="text-xs text-slate-500">Done</span>`}
+                        ${isOpen ? `<button onclick="closeTradeManual(${t.id})" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded transition">Close</button>` : `<span class="text-xs text-slate-500">Done</span>`}
                     </td>
                 `;
                 tableBody.appendChild(row);
