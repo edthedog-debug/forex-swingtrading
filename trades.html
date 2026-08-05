@@ -215,9 +215,8 @@
                 if (!response.ok) throw new Error("Network response was not ok");
                 
                 let resJson = await response.json();
-                console.log("Full response from Google Apps Script:", resJson);
+                console.log("Raw response from Apps Script:", resJson);
 
-                // Normalización universal de la respuesta (maneja si viene envuelta en objeto o directo array)
                 let rawData = [];
                 if (Array.isArray(resJson)) {
                     rawData = resJson;
@@ -226,12 +225,11 @@
                 } else if (resJson && Array.isArray(resJson.trades)) {
                     rawData = resJson.trades;
                 } else if (resJson && typeof resJson === 'object') {
-                    // Si viene como un objeto con claves numéricas o similar
                     rawData = Object.values(resJson);
                 }
 
                 trades = rawData.map((t, index) => {
-                    // Si viene como array plano de celdas por fila [id, type, entry, tp, sl, exit, profit, status]
+                    // Si viene como array de celdas por fila [id, type, entry, tp, sl, exit, profit, status]
                     if (Array.isArray(t)) {
                         return {
                             id: String(t[0] || Date.now() + index),
@@ -245,15 +243,15 @@
                         };
                     }
 
-                    // Si viene como objeto con propiedades
-                    let tId = String(t.id || t.ID || t.tradeId || (Date.now() + index));
-                    let tType = String(t.type || t.Type || t.action || "SELL").toUpperCase();
-                    let tEntry = Number(t.entry || t.Entry || t.price) || 0;
-                    let tTp = Number(t.tp || t.TP || t.takeProfit) || 0;
-                    let tSl = Number(t.sl || t.SL || t.stopLoss) || 0;
-                    let tExit = Number(t.exit || t.Exit) || 0;
-                    let tProfit = Number(t.profit || t.Profit) || 0;
-                    let tStatus = String(t.status || t.Status || "OPEN").toUpperCase();
+                    // Si viene como objeto con propiedades (manejando variantes de nombres y mayúsculas/minúsculas)
+                    let tId = String(t.id || t.ID || t.tradeId || t[0] || (Date.now() + index));
+                    let tType = String(t.type || t.Type || t.action || t[1] || "SELL").toUpperCase();
+                    let tEntry = Number(t.entry || t.Entry || t.price || t[2]) || 0;
+                    let tTp = Number(t.tp || t.TP || t.takeProfit || t[3]) || 0;
+                    let tSl = Number(t.sl || t.SL || t.stopLoss || t[4]) || 0;
+                    let tExit = Number(t.exit || t.Exit || t[5]) || 0;
+                    let tProfit = Number(t.profit || t.Profit || t[6]) || 0;
+                    let tStatus = String(t.status || t.Status || t[7] || "OPEN").toUpperCase();
 
                     return {
                         id: tId,
@@ -265,9 +263,9 @@
                         profit: tProfit,
                         status: tStatus.includes("CLOSE") ? "CLOSED" : "OPEN"
                     };
-                }).filter(t => t.entry > 0); // Filtra filas vacías o de cabecera
+                }).filter(t => t.entry > 0); // Filtra filas vacías de manera estricta
 
-                console.log("Processed trades array:", trades);
+                console.log("Parsed trades:", trades);
 
                 await evaluateAutoTriggers();
                 renderTrades();
@@ -275,7 +273,7 @@
                 console.error("Sheets fetch error:", error);
                 document.getElementById("trades-table-body").innerHTML = `
                     <tr><td colspan="7" class="p-4 text-center text-amber-400 text-xs">
-                        Connection warning or empty sheet. 
+                        Connection error or empty sheet. 
                         <button onclick="loadAllData()" class="underline ml-2 font-bold">Retry</button>
                     </td></tr>`;
                 trades = [];
