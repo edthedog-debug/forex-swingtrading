@@ -210,28 +210,27 @@
                 if (!response.ok) throw new Error("Network response was not ok");
                 
                 let rawData = await response.json();
+                console.log("Raw data from Google Sheets:", rawData);
                 
-                // Mapeo robusto adaptado al estado actual de las columnas (id, type, entry, tp, sl, exit, profit, status)
                 trades = rawData.map((t, index) => {
-                    let tradeId = t.id || (t.type && !t.id ? Date.now() + index : null) || index + 1;
-                    let tradeType = String(t.type || "").toUpperCase();
-                    let entryVal = Number(t.entry) || 0;
-
-                    // Si por el desplazamiento de columnas el "type" vino a parar a la propiedad "id" o similar
-                    if ((tradeType !== "BUY" && tradeType !== "SELL") && t.id && (String(t.id).toUpperCase() === "BUY" || String(t.id).toUpperCase() === "SELL")) {
-                        tradeType = String(t.id).toUpperCase();
-                        entryVal = Number(t.type) || 0;
-                    }
+                    let tId = String(t.id || t.ID || t[0] || (Date.now() + index));
+                    let tType = String(t.type || t.Type || t[1] || "SELL").toUpperCase();
+                    let tEntry = Number(t.entry || t.Entry || t[2]) || 0;
+                    let tTp = Number(t.tp || t.TP || t[3]) || 0;
+                    let tSl = Number(t.sl || t.SL || t[4]) || 0;
+                    let tExit = Number(t.exit || t.Exit || t[5]) || 0;
+                    let tProfit = Number(t.profit || t.Profit || t[6]) || 0;
+                    let tStatus = String(t.status || t.Status || t[7] || "OPEN").toUpperCase();
 
                     return {
-                        id: tradeId,
-                        type: (tradeType === "BUY" || tradeType === "SELL") ? tradeType : "SELL",
-                        entry: entryVal,
-                        tp: Number(t.tp) || 0,
-                        sl: Number(t.sl) || 0,
-                        exit: Number(t.exit) || 0,
-                        profit: Number(t.profit) || 0,
-                        status: String(t.status || "OPEN").toUpperCase()
+                        id: tId,
+                        type: tType.includes("BUY") ? "BUY" : "SELL",
+                        entry: tEntry,
+                        tp: tTp,
+                        sl: tSl,
+                        exit: tExit,
+                        profit: tProfit,
+                        status: tStatus.includes("CLOSE") ? "CLOSED" : "OPEN"
                     };
                 }).filter(t => t.entry > 0);
 
@@ -241,7 +240,7 @@
                 console.error("Sheets fetch error:", error);
                 document.getElementById("trades-table-body").innerHTML = `
                     <tr><td colspan="7" class="p-4 text-center text-amber-400 text-xs">
-                        Database ready. Waiting for records or connection check. 
+                        Database connection error or empty. 
                         <button onclick="loadAllData()" class="underline ml-2 font-bold">Retry</button>
                     </td></tr>`;
                 trades = [];
@@ -263,7 +262,7 @@
 
             const params = new URLSearchParams({
                 action: "add",
-                id: Date.now(),
+                id: String(Date.now()),
                 type: type,
                 entry: entry,
                 tp: tp,
@@ -292,7 +291,7 @@
         });
 
         window.closeTradeManual = async function(id) {
-            const trade = trades.find(t => t.id == id);
+            const trade = trades.find(t => String(t.id) === String(id));
             if (!trade) return;
 
             let profit = trade.type === "BUY" ? (currentMarketPrice - trade.entry) * UNITS_DEFAULT : (trade.entry - currentMarketPrice) * UNITS_DEFAULT;
@@ -302,7 +301,7 @@
         async function sendCloseRequest(id, exitPrice, profit) {
             const params = new URLSearchParams({
                 action: "close",
-                id: id,
+                id: String(id),
                 exit: exitPrice,
                 profit: parseFloat(profit.toFixed(2))
             });
@@ -385,7 +384,7 @@
                     <td class="p-3 font-mono text-slate-300">${displayExit}</td>
                     <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${currentProfit >= 0 ? '+' : ''}€${parseFloat(currentProfit).toFixed(2)}</td>
                     <td class="p-3 text-right">
-                        ${isOpen ? `<button onclick="closeTradeManual(${t.id})" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded">Close</button>` : `<span class="text-xs text-slate-500">Done</span>`}
+                        ${isOpen ? `<button onclick="closeTradeManual('${t.id}')" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded">Close</button>` : `<span class="text-xs text-slate-500">Done</span>`}
                     </td>
                 `;
                 tableBody.appendChild(row);
