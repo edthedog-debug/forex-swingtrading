@@ -49,7 +49,7 @@
                     <span class="block text-[10px] text-slate-400 uppercase font-bold">Suggested Setup</span>
                     <span id="suggestion-badge" class="text-xs font-bold text-emerald-400">Analyzing...</span>
                 </div>
-                <span id="live-market-display" class="bg-slate-900 border border-slate-700 rounded px-4 py-2 text-sm text-emerald-400 font-mono font-bold">1.1500</span>
+                <span id="live-market-display" class="bg-slate-900 border border-slate-700 rounded px-4 py-2 text-sm text-emerald-400 font-mono font-bold">...</span>
                 <button onclick="loadAllData()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded text-xs transition">Refresh</button>
             </div>
         </div>
@@ -73,15 +73,15 @@
                 </div>
                 <div>
                     <label class="block text-xs text-slate-400 mb-1">Entry Price</label>
-                    <input type="number" step="0.0001" id="entry-price" required placeholder="1.1500" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                    <input type="number" step="0.00001" id="entry-price" required placeholder="1.1541" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs text-slate-400 mb-1">Take Profit (TP)</label>
-                    <input type="number" step="0.0001" id="tp-price" placeholder="1.1600" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                    <input type="number" step="0.00001" id="tp-price" placeholder="1.1446" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs text-slate-400 mb-1">Stop Loss (SL)</label>
-                    <input type="number" step="0.0001" id="sl-price" placeholder="1.1450" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
+                    <input type="number" step="0.00001" id="sl-price" placeholder="1.1604" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs text-slate-400 mb-1">Volume / Units</label>
@@ -99,7 +99,7 @@
                 <h3 class="font-semibold text-slate-200">Cloud Database Trades History</h3>
                 <div class="flex items-center gap-2">
                     <button onclick="loadAllData()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded font-medium transition flex items-center gap-1">
-                        🔄 Refresh Sheets Connection
+                        🔄 Refresh
                     </button>
                     <button onclick="clearTrades()" class="text-xs text-red-400 hover:text-red-300 font-medium">Clear Database</button>
                 </div>
@@ -118,7 +118,7 @@
                         </tr>
                     </thead>
                     <tbody id="trades-table-body" class="divide-y divide-slate-700/50 text-sm">
-                        <tr><td colspan="7" class="p-4 text-center text-slate-500 text-xs">Loading data...</td></tr>
+                        <tr><td colspan="7" class="p-4 text-center text-slate-500 text-xs">Cargando base de datos...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -138,8 +138,11 @@
         const UNITS_DEFAULT = 10000;
 
         async function loadAllData() {
-            await fetchMarketPriceFromJson();
-            await fetchTradesFromSheets();
+            // OPTIMIZACIÓN: Cargar ambos orígenes de datos de forma simultánea en paralelo
+            await Promise.all([
+                fetchMarketPriceFromJson(),
+                fetchTradesFromSheets()
+            ]);
         }
 
         async function fetchMarketPriceFromJson() {
@@ -183,9 +186,9 @@
 
                 document.getElementById("market-source-info").innerText = "Synced with forex-swingtrading successfully";
                 const badge = document.getElementById("suggestion-badge");
-                badge.innerText = `${suggestedTrend} Target: ${customTp.toFixed(4)}`;
+                badge.innerText = `${suggestedTrend} Target: ${customTp}`;
                 badge.className = `text-xs font-bold ${suggestedTrend === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}`;
-                document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
+                document.getElementById("live-market-display").innerText = currentMarketPrice;
 
                 applyDashboardSuggestion();
             } catch (error) {
@@ -196,9 +199,9 @@
 
         function applyDashboardSuggestion() {
             document.getElementById("trade-type").value = suggestedTrend;
-            document.getElementById("entry-price").value = currentMarketPrice.toFixed(4);
-            document.getElementById("tp-price").value = customTp.toFixed(4);
-            document.getElementById("sl-price").value = customSl.toFixed(4);
+            document.getElementById("entry-price").value = currentMarketPrice;
+            document.getElementById("tp-price").value = customTp;
+            document.getElementById("sl-price").value = customSl;
         }
 
         async function fetchTradesFromSheets() {
@@ -209,13 +212,7 @@
                 });
                 
                 const textData = await response.text();
-                let resJson;
-                try {
-                    resJson = JSON.parse(textData);
-                } catch (e) {
-                    console.error("Respuesta no válida JSON:", textData);
-                    throw new Error("Invalid JSON response from Google Apps Script");
-                }
+                let resJson = JSON.parse(textData);
 
                 let rawData = [];
                 if (Array.isArray(resJson)) {
@@ -228,11 +225,8 @@
                     rawData = Object.values(resJson);
                 }
 
-                // Parser Definitivo
                 trades = rawData.map((t, index) => {
-                    // Si recibimos un array puro desde sheet.getValues()
                     if (Array.isArray(t)) {
-                        // BLOQUEO DE CABECERA: Si la fila empieza por "id" o no hay datos, la ignoramos.
                         if (String(t[0]).toLowerCase() === "id" || String(t[0]).trim() === "") return null;
                         
                         return {
@@ -241,14 +235,12 @@
                             entry: parseFloat(t[2]) || 0,
                             tp: parseFloat(t[3]) || 0,
                             sl: parseFloat(t[4]) || 0,
-                            // Si t[5] (exit) o t[6] (profit) están en blanco en tu Excel, parseFloat devuelve NaN. Forzamos 0.
                             exit: parseFloat(t[5]) || 0,
                             profit: parseFloat(t[6]) || 0,
                             status: String(t[7]).toUpperCase().includes("CLOSE") ? "CLOSED" : "OPEN"
                         };
                     }
 
-                    // Fallback si recibimos un objeto
                     if (String(t.id || t.ID || t[0]).toLowerCase() === "id") return null;
 
                     return {
@@ -263,15 +255,15 @@
                     };
                 }).filter(t => t !== null && t.entry > 0);
 
-                console.log("Trades cargados correctamente:", trades);
-
-                await evaluateAutoTriggers();
+                // OPTIMIZACIÓN: Renderizar tabla ANTES de evaluar cierres, para no bloquear la interfaz.
                 renderTrades();
+                evaluateAutoTriggers(); 
+                
             } catch (error) {
                 console.error("Sheets fetch error:", error);
                 document.getElementById("trades-table-body").innerHTML = `
                     <tr><td colspan="7" class="p-4 text-center text-amber-400 text-xs">
-                        Error al cargar. Verifica la URL de Google Sheets y CORS. 
+                        Error al conectar con Google Sheets. 
                         <button onclick="loadAllData()" class="underline ml-2 font-bold">Reintentar</button>
                     </td></tr>`;
                 trades = [];
@@ -287,9 +279,9 @@
             btn.disabled = true;
 
             const type = document.getElementById("trade-type").value;
-            const entry = parseFloat(document.getElementById("entry-price").value);
-            const tp = document.getElementById("tp-price").value ? parseFloat(document.getElementById("tp-price").value) : 0;
-            const sl = document.getElementById("sl-price").value ? parseFloat(document.getElementById("sl-price").value) : 0;
+            const entry = document.getElementById("entry-price").value;
+            const tp = document.getElementById("tp-price").value ? document.getElementById("tp-price").value : 0;
+            const sl = document.getElementById("sl-price").value ? document.getElementById("sl-price").value : 0;
 
             const params = new URLSearchParams({
                 action: "add",
@@ -334,7 +326,7 @@
                 action: "close",
                 id: String(id),
                 exit: exitPrice,
-                profit: parseFloat(profit.toFixed(2))
+                profit: parseFloat(profit.toFixed(2)) // Guardamos profit limpio con 2 decimales
             });
 
             try {
@@ -395,25 +387,30 @@
             trades.forEach(t => {
                 const isOpen = t.status === "OPEN";
                 let currentProfit = t.profit;
-                let displayExit = t.exit > 0 ? t.exit.toFixed(4) : '-';
+                let displayExit = t.exit > 0 ? t.exit : '-'; // Se usa el valor numérico puro
 
                 if (isOpen) {
                     currentProfit = t.type === "BUY" ? (currentMarketPrice - t.entry) * UNITS_DEFAULT : (t.entry - currentMarketPrice) * UNITS_DEFAULT;
-                    displayExit = `<span class="text-blue-400">${currentMarketPrice.toFixed(4)} (Live)</span>`;
+                    displayExit = `<span class="text-blue-400">${currentMarketPrice} (Live)</span>`;
                 }
 
+                // Proteccion de decimales en javascript para el P&L
+                currentProfit = Math.round(currentProfit * 100) / 100;
+                
                 const isWin = Number(currentProfit) >= 0;
                 const row = document.createElement("tr");
                 row.className = "hover:bg-slate-700/30 transition";
+                
+                // Mantenemos los valores t.entry, t.tp y t.sl puros
                 row.innerHTML = `
                     <td class="p-3">
                         <span class="px-2 py-1 rounded text-xs font-bold ${isOpen ? 'bg-blue-900/50 text-blue-400 border border-blue-700' : 'bg-slate-800 text-slate-400'}">${t.status}</span>
                     </td>
                     <td class="p-3 font-semibold ${t.type === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}">${t.type}</td>
-                    <td class="p-3 font-mono text-slate-300">${t.entry.toFixed(4)}</td>
-                    <td class="p-3 font-mono text-xs text-slate-400">TP: ${t.tp ? t.tp.toFixed(4) : '-'}<br>SL: ${t.sl ? t.sl.toFixed(4) : '-'}</td>
+                    <td class="p-3 font-mono text-slate-300">${t.entry}</td>
+                    <td class="p-3 font-mono text-xs text-slate-400">TP: ${t.tp ? t.tp : '-'}<br>SL: ${t.sl ? t.sl : '-'}</td>
                     <td class="p-3 font-mono text-slate-300">${displayExit}</td>
-                    <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${currentProfit >= 0 ? '+' : ''}€${parseFloat(currentProfit).toFixed(2)}</td>
+                    <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${currentProfit >= 0 ? '+' : ''}€${currentProfit.toFixed(2)}</td>
                     <td class="p-3 text-right">
                         ${isOpen ? `<button onclick="closeTradeManual('${t.id}')" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded">Close</button>` : `<span class="text-xs text-slate-500">Done</span>`}
                     </td>
@@ -449,6 +446,7 @@
 
             const totalNet = closedNet + openFloating;
             const profitElem = document.getElementById("stat-profit");
+            
             profitElem.innerText = (totalNet >= 0 ? "+€" : "-€") + Math.abs(totalNet).toFixed(2);
             profitElem.className = `text-2xl font-bold mt-1 ${totalNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
         }
