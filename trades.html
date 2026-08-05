@@ -149,7 +149,7 @@
                 let parsedTp = null;
                 let parsedSl = null;
 
-                // Also check if prices array exists in jsonData to extract the absolute latest price close
+                // Extract data precisely mapping object properties from data.json
                 if (jsonData && Array.isArray(jsonData.prices) && jsonData.prices.length > 0) {
                     foundPrice = Number(jsonData.prices[jsonData.prices.length - 1]);
                 } else if (Array.isArray(jsonData) && jsonData.length > 0) {
@@ -159,7 +159,7 @@
                         foundPrediction = Number(last.prediction || last.target || last.p || last.forecast);
                         explicitSignal = last.signal || last.trend || last.direction || last.action;
                         parsedTp = Number(last.tp || last.takeProfit);
-                        parsedSl = Number(last.sl || last.stopLoss);
+                        parsedSl = Number(last.sl || last.stopLoss || last.stop_loss);
                     } else if (typeof last === 'number') {
                         foundPrice = last;
                     }
@@ -168,7 +168,7 @@
                     foundPrediction = Number(jsonData.prediction || jsonData.target);
                     explicitSignal = jsonData.signal || jsonData.trend || jsonData.direction || jsonData.action;
                     parsedTp = Number(jsonData.tp || jsonData.takeProfit);
-                    parsedSl = Number(jsonData.sl || jsonData.stopLoss);
+                    parsedSl = Number(jsonData.sl || jsonData.stopLoss || jsonData.stop_loss);
                 }
 
                 if (!isNaN(foundPrice) && foundPrice > 0) {
@@ -179,7 +179,7 @@
                     predictedTargetPrice = foundPrediction;
                 }
 
-                // Determine trend accurately matching forex-swingtrading direction logic
+                // Determine trend accurately matching the dashboard signal logic
                 if (explicitSignal) {
                     const sigStr = String(explicitSignal).toUpperCase();
                     if (sigStr.includes("SELL") || sigStr.includes("SHORT") || sigStr === "DOWN" || sigStr === "BEARISH") {
@@ -191,7 +191,7 @@
                     suggestedTrend = predictedTargetPrice >= currentMarketPrice ? "BUY" : "SELL";
                 }
 
-                // Set strict corrected TP and SL matching suggestion direction (SELL or BUY)
+                // Strictly map explicit TP and SL from data.json without default formula overrides
                 if (!isNaN(parsedTp) && parsedTp > 0) {
                     customTp = parsedTp;
                 } else {
