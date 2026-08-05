@@ -122,7 +122,7 @@
     </div>
 
     <script>
-        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyQUOoLHOVvNjlr2hrMm91_mllqpvL62bbNWfdq2TFDQeHBBdQScI5BEG3TF-tsrWM/exec"; 
+        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzgDgNx44Sa30dzrWrPWZjJiCtYD2temBZfGL_i05tEFA7xxa_12xN_AkDtGWcxrZiP/exec"; 
         let trades = [];
         let currentMarketPrice = 1.1500;
         let predictedTargetPrice = 1.1600;
@@ -197,7 +197,7 @@
 
         async function fetchTradesFromSheets() {
             try {
-                const response = await fetch(SHEETS_WEB_APP_URL, { 
+                const response = await fetch(SHEETS_WEB_APP_URL + "?t=" + Date.now(), { 
                     method: 'GET',
                     redirect: 'follow'
                 });
@@ -230,25 +230,20 @@
             const entry = parseFloat(document.getElementById("entry-price").value);
             const tp = document.getElementById("tp-price").value ? parseFloat(document.getElementById("tp-price").value) : 0;
             const sl = document.getElementById("sl-price").value ? parseFloat(document.getElementById("sl-price").value) : 0;
-            const units = parseFloat(document.getElementById("trade-units").value) || UNITS_DEFAULT;
 
-            const newTrade = {
+            const params = new URLSearchParams({
                 action: "add",
                 id: Date.now(),
-                type,
-                entry,
-                tp,
-                sl,
-                exit: "-",
-                profit: 0,
-                status: "OPEN"
-            };
+                type: type,
+                entry: entry,
+                tp: tp,
+                sl: sl
+            });
 
             try {
-                await fetch(SHEETS_WEB_APP_URL, {
-                    method: "POST",
-                    mode: "no-cors",
-                    body: JSON.stringify(newTrade)
+                await fetch(`${SHEETS_WEB_APP_URL}?${params.toString()}`, {
+                    method: "GET",
+                    redirect: "follow"
                 });
                 
                 setTimeout(() => {
@@ -257,7 +252,7 @@
                     btn.innerText = "Open Trade";
                     btn.disabled = false;
                     loadAllData();
-                }, 1500);
+                }, 1200);
 
             } catch (err) {
                 alert("Error saving trade: " + err);
@@ -275,26 +270,25 @@
         }
 
         async function sendCloseRequest(id, exitPrice, profit) {
+            const params = new URLSearchParams({
+                action: "close",
+                id: id,
+                exit: exitPrice,
+                profit: parseFloat(profit.toFixed(2))
+            });
+
             try {
-                await fetch(SHEETS_WEB_APP_URL, {
-                    method: "POST",
-                    mode: "no-cors",
-                    body: JSON.stringify({
-                        action: "close",
-                        id: id,
-                        exit: exitPrice,
-                        profit: parseFloat(profit.toFixed(2))
-                    })
+                await fetch(`${SHEETS_WEB_APP_URL}?${params.toString()}`, {
+                    method: "GET",
+                    redirect: "follow"
                 });
-                setTimeout(loadAllData, 1500);
+                setTimeout(loadAllData, 1200);
             } catch (err) {
                 console.error("Close error:", err);
             }
         }
 
         async function evaluateAutoTriggers() {
-            let stateChanged = false;
-
             for (let t of trades) {
                 if (t.status === "OPEN") {
                     let shouldClose = false;
@@ -312,7 +306,6 @@
                     if (shouldClose) {
                         let profit = t.type === "BUY" ? (closePrice - t.entry) * UNITS_DEFAULT : (t.entry - closePrice) * UNITS_DEFAULT;
                         await sendCloseRequest(t.id, closePrice, profit);
-                        stateChanged = true;
                     }
                 }
             }
@@ -320,12 +313,12 @@
 
         window.clearTrades = async function() {
             if(confirm("Clear all records from Google Sheets?")) {
-                await fetch(SHEETS_WEB_APP_URL, {
-                    method: "POST",
-                    mode: "no-cors",
-                    body: JSON.stringify({ action: "clear" })
+                const params = new URLSearchParams({ action: "clear" });
+                await fetch(`${SHEETS_WEB_APP_URL}?${params.toString()}`, {
+                    method: "GET",
+                    redirect: "follow"
                 });
-                setTimeout(loadAllData, 1500);
+                setTimeout(loadAllData, 1200);
             }
         }
 
