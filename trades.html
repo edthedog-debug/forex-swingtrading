@@ -127,7 +127,9 @@
     </div>
 
     <script>
+        // Sustituye por tu URL real de Apps Script
         const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwH0TpLEIuyVea-wez4Nir9A5_kEQEBP1ZYhWkbiU-cpDTKoSTdAfXwvHQ3yLHdTR2k/exec"; 
+        
         let trades = [];
         let currentMarketPrice = 1.1500;
         let suggestedTrend = "SELL";
@@ -215,8 +217,6 @@
                     throw new Error("Invalid JSON response from Google Apps Script");
                 }
 
-                console.log("Datos recibidos de Google Sheets:", resJson);
-
                 let rawData = [];
                 if (Array.isArray(resJson)) {
                     rawData = resJson;
@@ -228,42 +228,42 @@
                     rawData = Object.values(resJson);
                 }
 
+                // Parser Definitivo
                 trades = rawData.map((t, index) => {
+                    // Si recibimos un array puro desde sheet.getValues()
                     if (Array.isArray(t)) {
+                        // BLOQUEO DE CABECERA: Si la fila empieza por "id" o no hay datos, la ignoramos.
+                        if (String(t[0]).toLowerCase() === "id" || String(t[0]).trim() === "") return null;
+                        
                         return {
-                            id: String(t[0] || Date.now() + index),
-                            type: String(t[1] || "SELL").toUpperCase().includes("BUY") ? "BUY" : "SELL",
-                            entry: Number(t[2]) || 0,
-                            tp: Number(t[3]) || 0,
-                            sl: Number(t[4]) || 0,
-                            exit: Number(t[5]) || 0,
-                            profit: Number(t[6]) || 0,
-                            status: String(t[7] || "OPEN").toUpperCase().includes("CLOSE") ? "CLOSED" : "OPEN"
+                            id: String(t[0]),
+                            type: String(t[1]).toUpperCase().includes("BUY") ? "BUY" : "SELL",
+                            entry: parseFloat(t[2]) || 0,
+                            tp: parseFloat(t[3]) || 0,
+                            sl: parseFloat(t[4]) || 0,
+                            // Si t[5] (exit) o t[6] (profit) están en blanco en tu Excel, parseFloat devuelve NaN. Forzamos 0.
+                            exit: parseFloat(t[5]) || 0,
+                            profit: parseFloat(t[6]) || 0,
+                            status: String(t[7]).toUpperCase().includes("CLOSE") ? "CLOSED" : "OPEN"
                         };
                     }
 
-                    let tId = String(t.id || t.ID || t.tradeId || t[0] || (Date.now() + index));
-                    let tType = String(t.type || t.Type || t.action || t[1] || "SELL").toUpperCase();
-                    let tEntry = Number(t.entry || t.Entry || t.price || t[2]) || 0;
-                    let tTp = Number(t.tp || t.TP || t.takeProfit || t[3]) || 0;
-                    let tSl = Number(t.sl || t.SL || t.stopLoss || t[4]) || 0;
-                    let tExit = Number(t.exit || t.Exit || t[5]) || 0;
-                    let tProfit = Number(t.profit || t.Profit || t[6]) || 0;
-                    let tStatus = String(t.status || t.Status || t[7] || "OPEN").toUpperCase();
+                    // Fallback si recibimos un objeto
+                    if (String(t.id || t.ID || t[0]).toLowerCase() === "id") return null;
 
                     return {
-                        id: tId,
-                        type: tType.includes("BUY") ? "BUY" : "SELL",
-                        entry: tEntry,
-                        tp: tTp,
-                        sl: tSl,
-                        exit: tExit,
-                        profit: tProfit,
-                        status: tStatus.includes("CLOSE") ? "CLOSED" : "OPEN"
+                        id: String(t.id || t.ID || t.tradeId || (Date.now() + index)),
+                        type: String(t.type || t.Type || t.action || "SELL").toUpperCase().includes("BUY") ? "BUY" : "SELL",
+                        entry: parseFloat(t.entry || t.Entry || t.price) || 0,
+                        tp: parseFloat(t.tp || t.TP || t.takeProfit) || 0,
+                        sl: parseFloat(t.sl || t.SL || t.stopLoss) || 0,
+                        exit: parseFloat(t.exit || t.Exit) || 0,
+                        profit: parseFloat(t.profit || t.Profit) || 0,
+                        status: String(t.status || t.Status || "OPEN").toUpperCase().includes("CLOSE") ? "CLOSED" : "OPEN"
                     };
-                }).filter(t => t.entry > 0 && !isNaN(t.entry) && t.id !== "id" && t.id !== "ID");
+                }).filter(t => t !== null && t.entry > 0);
 
-                console.log("Trades procesados y filtrados:", trades);
+                console.log("Trades cargados correctamente:", trades);
 
                 await evaluateAutoTriggers();
                 renderTrades();
@@ -271,8 +271,8 @@
                 console.error("Sheets fetch error:", error);
                 document.getElementById("trades-table-body").innerHTML = `
                     <tr><td colspan="7" class="p-4 text-center text-amber-400 text-xs">
-                        Error loading cloud trades. 
-                        <button onclick="loadAllData()" class="underline ml-2 font-bold">Retry</button>
+                        Error al cargar. Verifica la URL de Google Sheets y CORS. 
+                        <button onclick="loadAllData()" class="underline ml-2 font-bold">Reintentar</button>
                     </td></tr>`;
                 trades = [];
                 updateMetrics([]);
