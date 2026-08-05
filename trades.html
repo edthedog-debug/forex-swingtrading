@@ -130,8 +130,7 @@
     </div>
 
     <script>
-        // Replace with your real Apps Script URL
-        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwH0TpLEIuyVea-wez4Nir9A5_kEQEBP1ZYhWkbiU-cpDTKoSTdAfXwvHQ3yLHdTR2k/exec"; 
+        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzAgATEM0z7ukQrJYVe0jYWCUxZ-GE3vbmd2COwuj8hodfhCdEwXJiRnMOPwcKspzxU/exec"; 
         
         let trades = [];
         let currentMarketPrice = 1.1500;
@@ -143,12 +142,42 @@
         let displayCustomSl = "1.1604";
         const UNITS_DEFAULT = 10000;
 
+        let isFetching = false;
+        let pendingCloseIds = new Set();
+
+        // Cleans price strings contaminated by Google Sheets ISO Date formatting
+        function parsePrice(val) {
+            if (val === null || val === undefined || val === "" || val === "-") return 0;
+            let str = String(val).trim();
+            
+            if (str.includes("T") || str.includes("-01-01")) {
+                let firstPart = str.split("-")[0];
+                let num = parseFloat(firstPart);
+                if (!isNaN(num) && num > 100) return num / 10000;
+            }
+            
+            let cleaned = str.replace(/[^0-9.-]/g, '');
+            let num = parseFloat(cleaned);
+            return isNaN(num) ? 0 : num;
+        }
+
+        function formatDisplayPrice(val) {
+            if (val === null || val === undefined || val === "" || val === "-") return "-";
+            let p = parsePrice(val);
+            return p > 0 ? p.toString() : "-";
+        }
+
         async function loadAllData() {
-            // OPTIMIZATION: Load both data sources in parallel
-            await Promise.all([
-                fetchMarketPriceFromJson(),
-                fetchTradesFromSheets()
-            ]);
+            if (isFetching) return;
+            isFetching = true;
+            try {
+                await Promise.all([
+                    fetchMarketPriceFromJson(),
+                    fetchTradesFromSheets()
+                ]);
+            } finally {
+                isFetching = false;
+            }
         }
 
         async function fetchMarketPriceFromJson() {
@@ -174,24 +203,24 @@
 
                 if (targetObj) {
                     let rawPrice = targetObj.price || targetObj.currentPrice || targetObj.close || targetObj.value;
-                    let p = Number(rawPrice);
-                    if (!isNaN(p) && p > 0) {
+                    let p = parsePrice(rawPrice);
+                    if (p > 0) {
                         currentMarketPrice = p;
-                        displayMarketPrice = String(rawPrice);
+                        displayMarketPrice = p.toString();
                     }
 
                     let rawSl = targetObj.stopLoss || targetObj.stop_loss || targetObj.sl;
-                    let slVal = Number(rawSl);
-                    if (!isNaN(slVal) && slVal > 0) {
+                    let slVal = parsePrice(rawSl);
+                    if (slVal > 0) {
                         customSl = slVal;
-                        displayCustomSl = String(rawSl);
+                        displayCustomSl = slVal.toString();
                     }
 
                     let rawTp = targetObj.takeProfit || targetObj.tp || targetObj.target;
-                    let tpVal = Number(rawTp);
-                    if (!isNaN(tpVal) && tpVal > 0) {
+                    let tpVal = parsePrice(rawTp);
+                    if (tpVal > 0) {
                         customTp = tpVal;
-                        displayCustomTp = String(rawTp);
+                        displayCustomTp = tpVal.toString();
                     }
 
                     let actionStr = String(targetObj.action || targetObj.signal || targetObj.trend || "").toUpperCase();
@@ -246,43 +275,44 @@
                     if (Array.isArray(t)) {
                         if (String(t[0]).toLowerCase() === "id" || String(t[0]).trim() === "") return null;
                         
+                        let entryVal = parsePrice(t[2]);
                         return {
                             id: String(t[0]),
                             type: String(t[1]).toUpperCase().includes("BUY") ? "BUY" : "SELL",
-                            entry: parseFloat(t[2]) || 0,
-                            displayEntry: String(t[2]).trim() !== "" ? String(t[2]) : "0",
-                            tp: parseFloat(t[3]) || 0,
-                            displayTp: String(t[3]).trim() !== "" ? String(t[3]) : "-",
-                            sl: parseFloat(t[4]) || 0,
-                            displaySl: String(t[4]).trim() !== "" ? String(t[4]) : "-",
-                            exit: parseFloat(t[5]) || 0,
-                            displayExit: String(t[5]).trim() !== "" ? String(t[5]) : "-",
-                            profit: parseFloat(t[6]) || 0,
+                            entry: entryVal,
+                            displayEntry: formatDisplayPrice(t[2]),
+                            tp: parsePrice(t[3]),
+                            displayTp: formatDisplayPrice(t[3]),
+                            sl: parsePrice(t[4]),
+                            displaySl: formatDisplayPrice(t[4]),
+                            exit: parsePrice(t[5]),
+                            displayExit: formatDisplayPrice(t[5]),
+                            profit: parsePrice(t[6]),
                             status: String(t[7]).toUpperCase().includes("CLOSE") ? "CLOSED" : "OPEN"
                         };
                     }
 
                     if (String(t.id || t.ID || t[0]).toLowerCase() === "id") return null;
 
+                    let entryVal = parsePrice(t.entry || t.Entry || t.price);
                     return {
                         id: String(t.id || t.ID || t.tradeId || (Date.now() + index)),
                         type: String(t.type || t.Type || t.action || "SELL").toUpperCase().includes("BUY") ? "BUY" : "SELL",
-                        entry: parseFloat(t.entry || t.Entry || t.price) || 0,
-                        displayEntry: String(t.entry || t.Entry || t.price || "0"),
-                        tp: parseFloat(t.tp || t.TP || t.takeProfit) || 0,
-                        displayTp: String(t.tp || t.TP || t.takeProfit || "-"),
-                        sl: parseFloat(t.sl || t.SL || t.stopLoss) || 0,
-                        displaySl: String(t.sl || t.SL || t.stopLoss || "-"),
-                        exit: parseFloat(t.exit || t.Exit) || 0,
-                        displayExit: String(t.exit || t.Exit || "-"),
-                        profit: parseFloat(t.profit || t.Profit) || 0,
+                        entry: entryVal,
+                        displayEntry: formatDisplayPrice(t.entry || t.Entry || t.price),
+                        tp: parsePrice(t.tp || t.TP || t.takeProfit),
+                        displayTp: formatDisplayPrice(t.tp || t.TP || t.takeProfit),
+                        sl: parsePrice(t.sl || t.SL || t.stopLoss),
+                        displaySl: formatDisplayPrice(t.sl || t.SL || t.stopLoss),
+                        exit: parsePrice(t.exit || t.Exit),
+                        displayExit: formatDisplayPrice(t.exit || t.Exit),
+                        profit: parsePrice(t.profit || t.Profit),
                         status: String(t.status || t.Status || "OPEN").toUpperCase().includes("CLOSE") ? "CLOSED" : "OPEN"
                     };
                 }).filter(t => t !== null && t.entry > 0);
 
-                // OPTIMIZATION: Render table BEFORE evaluating closures, to prevent UI locking.
                 renderTrades();
-                evaluateAutoTriggers(); 
+                await evaluateAutoTriggers(); 
                 
             } catch (error) {
                 console.error("Sheets fetch error:", error);
@@ -329,7 +359,7 @@
                     btn.innerText = "Open Trade";
                     btn.disabled = false;
                     loadAllData();
-                }, 1200);
+                }, 1000);
 
             } catch (err) {
                 alert("Error saving trade: " + err);
@@ -339,6 +369,9 @@
         });
 
         window.closeTradeManual = async function(id) {
+            if (pendingCloseIds.has(String(id))) return;
+            pendingCloseIds.add(String(id));
+
             const trade = trades.find(t => String(t.id) === String(id));
             if (!trade) return;
 
@@ -351,7 +384,7 @@
                 action: "close",
                 id: String(id),
                 exit: exitPriceStr,
-                profit: parseFloat(profit.toFixed(2)) // Save clean profit with 2 decimals
+                profit: parseFloat(profit.toFixed(2))
             });
 
             try {
@@ -359,15 +392,17 @@
                     method: "GET",
                     redirect: "follow"
                 });
-                setTimeout(loadAllData, 1200);
+                setTimeout(loadAllData, 1000);
             } catch (err) {
                 console.error("Close error:", err);
+            } finally {
+                pendingCloseIds.delete(String(id));
             }
         }
 
         async function evaluateAutoTriggers() {
             for (let t of trades) {
-                if (t.status === "OPEN") {
+                if (t.status === "OPEN" && !pendingCloseIds.has(String(t.id))) {
                     let shouldClose = false;
                     let closePriceFloat = currentMarketPrice;
                     let closePriceStr = displayMarketPrice;
@@ -382,6 +417,7 @@
                     }
 
                     if (shouldClose) {
+                        pendingCloseIds.add(String(t.id));
                         let profit = t.type === "BUY" ? (closePriceFloat - t.entry) * UNITS_DEFAULT : (t.entry - closePriceFloat) * UNITS_DEFAULT;
                         await sendCloseRequest(t.id, closePriceStr, profit);
                     }
@@ -396,7 +432,7 @@
                     method: "GET",
                     redirect: "follow"
                 });
-                setTimeout(loadAllData, 1200);
+                setTimeout(loadAllData, 1000);
             }
         }
 
@@ -413,28 +449,26 @@
             trades.forEach(t => {
                 const isOpen = t.status === "OPEN";
                 let currentProfit = t.profit;
-                let displayExitCol = t.displayExit; // Uses the pure numeric string
+                let displayExitCol = t.displayExit;
 
                 if (isOpen) {
                     currentProfit = t.type === "BUY" ? (currentMarketPrice - t.entry) * UNITS_DEFAULT : (t.entry - currentMarketPrice) * UNITS_DEFAULT;
                     displayExitCol = `<span class="text-blue-400">${displayMarketPrice} (Live)</span>`;
                 }
 
-                // Decimal protection in JS for P&L
                 currentProfit = Math.round(currentProfit * 100) / 100;
                 
                 const isWin = Number(currentProfit) >= 0;
                 const row = document.createElement("tr");
                 row.className = "hover:bg-slate-700/30 transition";
                 
-                // Displays exact strings (displayEntry, displayTp, displaySl) to guarantee perfect decimals
                 row.innerHTML = `
                     <td class="p-3">
                         <span class="px-2 py-1 rounded text-xs font-bold ${isOpen ? 'bg-blue-900/50 text-blue-400 border border-blue-700' : 'bg-slate-800 text-slate-400'}">${t.status}</span>
                     </td>
                     <td class="p-3 font-semibold ${t.type === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}">${t.type}</td>
                     <td class="p-3 font-mono text-slate-300">${t.displayEntry}</td>
-                    <td class="p-3 font-mono text-xs text-slate-400">TP: ${t.tp ? t.displayTp : '-'}<br>SL: ${t.sl ? t.displaySl : '-'}</td>
+                    <td class="p-3 font-mono text-xs text-slate-400">TP: ${t.displayTp}<br>SL: ${t.displaySl}</td>
                     <td class="p-3 font-mono text-slate-300">${displayExitCol}</td>
                     <td class="p-3 font-mono font-bold ${isWin ? 'text-emerald-400' : 'text-red-400'}">${currentProfit >= 0 ? '+' : ''}€${Math.abs(currentProfit).toFixed(2)}</td>
                     <td class="p-3 text-right">
@@ -477,10 +511,7 @@
             profitElem.className = `text-2xl font-bold mt-1 ${totalNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`;
         }
 
-        // Initialize first load
         loadAllData();
-        
-        // Auto-refresh the dashboard every 5 seconds to ensure real-time updates and remove the need for a manual refresh button
         setInterval(loadAllData, 5000);
     </script>
 </body>
