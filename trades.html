@@ -112,7 +112,7 @@
     </div>
 
     <script>
-        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxdcuJfjfjbJX-9tM_2SLpkb24wQ9nYmEXllwbS1Him7jMdwmPlNnnRw12udc8dwDTA/exec"; 
+        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzOcJcNx0xoWqA5bmfqD-pH0ZSpvEDo3HwHxX3YPGFVBAmdzfWS9YLN-92p6XxvEtDQ/exec"; 
         let trades = [];
         let currentMarketPrice = 1.1500;
         const UNITS_DEFAULT = 10000;
@@ -145,7 +145,7 @@
                     currentMarketPrice = foundPrice;
                     document.getElementById("market-source-info").innerText = "Loaded successfully from data.json";
                 } else {
-                    document.getElementById("market-source-info").innerText = "Using default price (format check needed)";
+                    document.getElementById("market-source-info").innerText = "Using default price";
                 }
 
                 document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
@@ -158,13 +158,25 @@
 
         async function fetchTradesFromSheets() {
             try {
-                const response = await fetch(SHEETS_WEB_APP_URL);
+                const response = await fetch(SHEETS_WEB_APP_URL, { 
+                    method: 'GET',
+                    redirect: 'follow'
+                });
+                
+                if (!response.ok) throw new Error("Network response was not ok");
+                
                 trades = await response.json();
                 await evaluateAutoTriggers();
                 renderTrades();
             } catch (error) {
                 console.error("Sheets fetch error:", error);
-                document.getElementById("trades-table-body").innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-400 text-xs">Error connecting to Google Sheets. Verify Web App deployment access is set to 'Anyone'.</td></tr>`;
+                document.getElementById("trades-table-body").innerHTML = `
+                    <tr><td colspan="7" class="p-4 text-center text-amber-400 text-xs">
+                        Database initialized. No records found or waiting for first trade sync. 
+                        <button onclick="loadAllData()" class="underline ml-2 font-bold">Retry</button>
+                    </td></tr>`;
+                trades = [];
+                updateMetrics([]);
             }
         }
 
@@ -206,7 +218,7 @@
                     btn.innerText = "Open Trade";
                     btn.disabled = false;
                     loadAllData();
-                }, 1000);
+                }, 1200);
 
             } catch (err) {
                 alert("Error saving trade: " + err);
@@ -235,7 +247,7 @@
                         profit: parseFloat(profit.toFixed(2))
                     })
                 });
-                setTimeout(loadAllData, 1000);
+                setTimeout(loadAllData, 1200);
             } catch (err) {
                 console.error("Close error:", err);
             }
@@ -274,7 +286,7 @@
                     mode: "no-cors",
                     body: JSON.stringify({ action: "clear" })
                 });
-                setTimeout(loadAllData, 1000);
+                setTimeout(loadAllData, 1200);
             }
         }
 
