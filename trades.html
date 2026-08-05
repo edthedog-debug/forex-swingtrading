@@ -122,7 +122,8 @@
     </div>
 
     <script>
-        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzgDgNx44Sa30dzrWrPWZjJiCtYD2temBZfGL_i05tEFA7xxa_12xN_AkDtGWcxrZiP/exec"; 
+        // Updated Google Sheets Web App URL
+        const SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwH0TpLEIuyVea-wez4Nir9A5_kEQEBP1ZYhWkbiU-cpDTKoSTdAfXwvHQ3yLHdTR2k/exec"; 
         let trades = [];
         let currentMarketPrice = 1.1500;
         let predictedTargetPrice = 1.1600;
@@ -187,7 +188,7 @@
                     suggestedTrend = predictedTargetPrice >= currentMarketPrice ? "BUY" : "SELL";
                 }
 
-                // Set strict TP and SL matching suggestion direction
+                // Set strict corrected TP and SL matching suggestion direction (SELL or BUY)
                 if (!isNaN(parsedTp) && parsedTp > 0) {
                     customTp = parsedTp;
                 } else {
@@ -201,7 +202,9 @@
                 }
                 
                 document.getElementById("market-source-info").innerText = "Synced with forex-swingtrading successfully";
-                document.getElementById("suggestion-badge").innerText = `${suggestedTrend} Target: ${customTp.toFixed(4)}`;
+                const badge = document.getElementById("suggestion-badge");
+                badge.innerText = `${suggestedTrend} Target: ${customTp.toFixed(4)}`;
+                badge.className = `text-xs font-bold ${suggestedTrend === 'BUY' ? 'text-emerald-400' : 'text-amber-400'}`;
                 document.getElementById("live-market-display").innerText = currentMarketPrice.toFixed(4);
 
                 applyDashboardSuggestion();
