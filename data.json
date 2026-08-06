@@ -1,8 +1,7 @@
 {
-    "lastUpdate": "2026-08-05 10:36:30 UTC",
-    "currentPrice": 1.1541,
+    "lastUpdate": "2026-08-06 10:40:35 UTC",
+    "currentPrice": 1.1546,
     "dates": [
-        "2026-04-02",
         "2026-04-03",
         "2026-04-06",
         "2026-04-07",
@@ -91,10 +90,10 @@
         "2026-07-31",
         "2026-08-03",
         "2026-08-04",
-        "2026-08-05"
+        "2026-08-05",
+        "2026-08-06"
     ],
     "prices": [
-        1.159057378768921,
         1.1541746854782104,
         1.150999665260315,
         1.1541212797164917,
@@ -183,24 +182,25 @@
         1.1523525714874268,
         1.154401183128357,
         1.150734782218933,
-        1.154068112373352
+        1.153242826461792,
+        1.1546010971069336
     ],
-    "upperBand": 1.1543,
-    "lowerBand": 1.1332,
-    "sma": 1.1438,
-    "sma50": 1.1478,
-    "rsi": 58.9,
+    "upperBand": 1.1557,
+    "lowerBand": 1.133,
+    "sma": 1.1444,
+    "sma50": 1.1477,
+    "rsi": 63.4,
     "signal": "SELL (SHORT)",
-    "stopLoss": 1.1604,
-    "takeProfit": 1.1446,
+    "stopLoss": 1.1614,
+    "takeProfit": 1.1444,
     "backtest": {
         "initialCapital": 10000.0,
-        "finalCapital": 10948.98,
-        "totalReturn": 9.49,
-        "winRate": 56.2,
-        "maxDrawdown": 2.74,
-        "profitFactor": 2.39,
-        "totalTrades": 16,
+        "finalCapital": 10508.53,
+        "totalReturn": 5.09,
+        "winRate": 42.9,
+        "maxDrawdown": 3.06,
+        "profitFactor": 1.47,
+        "totalTrades": 21,
         "trades": [
             {
                 "entry": "2026-01-29",
