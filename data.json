@@ -1,8 +1,7 @@
 {
-    "lastUpdate": "2026-09-15 13:13:38 UTC",
-    "currentPrice": 1.1551,
+    "lastUpdate": "2026-09-16 13:12:55 UTC",
+    "currentPrice": 1.1538,
     "dates": [
-        "2026-05-13",
         "2026-05-14",
         "2026-05-15",
         "2026-05-18",
@@ -91,10 +90,10 @@
         "2026-09-10",
         "2026-09-11",
         "2026-09-14",
-        "2026-09-15"
+        "2026-09-15",
+        "2026-09-16"
     ],
     "prices": [
-        1.1735436916351318,
         1.1716049909591675,
         1.166208028793335,
         1.161440134048462,
@@ -183,33 +182,26 @@
         1.1633858680725098,
         1.1609952449798584,
         1.1593934297561646,
-        1.1551345586776733
+        1.154854416847229,
+        1.1538017988204956
     ],
-    "upperBand": 1.1703,
-    "lowerBand": 1.1552,
-    "sma": 1.1628,
-    "sma50": 1.1533,
-    "rsi": 30.1,
+    "upperBand": 1.1708,
+    "lowerBand": 1.1542,
+    "sma": 1.1625,
+    "sma50": 1.1536,
+    "rsi": 30.7,
     "signal": "BUY (LONG)",
-    "stopLoss": 1.1506,
-    "takeProfit": 1.1619,
+    "stopLoss": 1.1488,
+    "takeProfit": 1.1613,
     "backtest": {
         "initialCapital": 10000.0,
-        "finalCapital": 10474.73,
-        "totalReturn": 4.75,
-        "winRate": 42.1,
+        "finalCapital": 10614.03,
+        "totalReturn": 6.14,
+        "winRate": 45.0,
         "maxDrawdown": 2.83,
-        "profitFactor": 1.46,
-        "totalTrades": 19,
+        "profitFactor": 1.6,
+        "totalTrades": 20,
         "trades": [
-            {
-                "entry": "2026-02-04",
-                "exit": "2026-03-09",
-                "type": "SELL",
-                "entryPrice": 1.1816,
-                "exitPrice": 1.1523,
-                "profit": 292.88
-            },
             {
                 "entry": "2026-03-10",
                 "exit": "2026-03-16",
@@ -281,6 +273,14 @@
                 "entryPrice": 1.1544,
                 "exitPrice": 1.1674,
                 "profit": -129.78
+            },
+            {
+                "entry": "2026-08-21",
+                "exit": "2026-09-15",
+                "type": "SELL",
+                "entryPrice": 1.1688,
+                "exitPrice": 1.1549,
+                "profit": 139.3
             }
         ]
     }
